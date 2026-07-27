@@ -1,0 +1,13 @@
+services:
+  api:
+    build: .
+    image: api:latest
+    container_name: drishyam_api
+    ports:
+      - "8000:8000"
+    environment:
+      - FLASK_ENV=production
+    restart: unless-stopped
+    # Mount config.ini separately so you can change it without rebuilding
+    volumes:
+      - ./config.ini:/app/config.ini:ro

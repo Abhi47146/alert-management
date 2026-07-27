@@ -1,0 +1,72 @@
+================================================================================
+DRISHYAM SURVEILLANCE COMMAND CENTER - QUICK START
+================================================================================
+
+To run the app on your local machine:
+
+STEP 1: Install Python Requirements
+────────────────────────────────────
+  pip install -r requirements.txt
+
+STEP 2: Run the Application  
+────────────────────────────────────
+  python3 app.py
+
+  OR on Linux/Mac:
+  chmod +x run.sh && ./run.sh
+
+  OR on Windows:
+  run.bat
+
+STEP 3: Open Browser
+────────────────────────────────────
+  http://localhost:5000
+
+LOGIN CREDENTIALS
+────────────────────────────────────
+  Email:    admin@drishyam.com
+  Password: password
+
+PAGES AVAILABLE
+────────────────────────────────────
+  /login                 - Login page
+  /dashboard             - Main dashboard
+  /camera-management     - Camera management
+  /nvr-recordings        - NVR & recordings
+  /alerts                - Alerts management
+  /system-health         - System health
+  /site-monitoring       - Site monitoring
+  /settings              - Settings
+
+WHAT THE SCRIPT DOES
+────────────────────────────────────
+  1. Checks if Python 3 is installed
+  2. Checks if React app is built
+  3. Builds the app if needed (using pnpm)
+  4. Starts Flask server on port 5000
+  5. Serves the entire app
+
+REQUIREMENTS
+────────────────────────────────────
+  - Python 3.7 or higher
+  - pip (Python package manager)
+  - pnpm (will be checked/installed automatically)
+
+TROUBLESHOOTING
+────────────────────────────────────
+  Port 5000 in use?
+    → Edit app.py, change port=5000 to port=5001
+
+  "pnpm not found"?
+    → Install: npm install -g pnpm
+
+  "Flask not found"?
+    → Run: pip install -r requirements.txt
+
+  More help?
+    → See README_PYTHON.md
+    → See SETUP_GUIDE.md
+
+================================================================================
+For detailed documentation, see README_PYTHON.md or SETUP_GUIDE.md
+================================================================================
