@@ -1,0 +1,15 @@
+# Python
+__pycache__/
+*.pyc
+myenv/
+venv/
+.env
+
+# Node
+node_modules/
+dynamic/
+# Logs
+*.log
+
+# OS
+.DS_Store
