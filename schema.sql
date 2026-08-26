@@ -121,9 +121,11 @@ CREATE TABLE cameras (
     registered_by UUID,
     deregistered_at TIMESTAMPTZ,
     created_at TIMESTAMPTZ DEFAULT NOW(),
-    monitoring_start_time TIME WITHOUT TIME ZONE,
-    monitoring_end_time TIME WITHOUT TIME ZONE,
-    is_process BOOLEAN DEFAULT FALSE
+    
+    monitoring_start_time TEXT DEFAULT NULL,
+    monitoring_end_time TEXT DEFAULT NULL,
+    
+    is_process BOOLEAN DEFAULT FALSE,
 
     FOREIGN KEY (site_id)
         REFERENCES sites(id),

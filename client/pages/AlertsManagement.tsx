@@ -1,7 +1,7 @@
 "use client";
 
 import Layout from "@/components/Layout";
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
 import { Card } from "@/components/ui/card";
@@ -32,6 +32,10 @@ export default function AlertsManagement() {
   const [alerts, setAlerts] = useState<Alert[]>([]);
   const [loading, setLoading] = useState(true);
 
+  // Track known alert IDs to detect new alerts
+  const previousAlertIdsRef = useRef<Set<string>>(new Set());
+  const isInitialFetchRef = useRef<boolean>(true);
+
   // Filter tracking view states
   const [selectedSite, setSelectedSite] = useState("All Sites");
   const [selectedAlertType, setSelectedAlertType] = useState("All Alert Types");
@@ -44,12 +48,43 @@ export default function AlertsManagement() {
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   const [previewOpen, setPreviewOpen] = useState(false);
 
+  // Helper function to play the alert sound safely
+  const playAlertSound = () => {
+    try {
+      const audio = new Audio("/alert_sound.mp3");
+      audio.play().catch((err) => {
+        // Autoplay policies might block audio until the user interacts with the document
+        console.warn("Audio play blocked by browser autoplay policy:", err);
+      });
+    } catch (err) {
+      console.error("Failed to play alert sound:", err);
+    }
+  };
+
   const fetchAlerts = async (showLoadingBar = false) => {
     try {
       if (showLoadingBar) setLoading(true);
       const response = await fetch("/api/alerts");
       if (!response.ok) throw new Error("Failed to pull active incident logs");
-      const data = await response.json();
+      const data: Alert[] = await response.json();
+
+      const incomingIds = new Set(data.map((alert) => alert.id));
+
+      // Check for newly added alerts (skip check on the initial load)
+      if (!isInitialFetchRef.current) {
+        const hasNewAlert = data.some(
+          (alert) => !previousAlertIdsRef.current.has(alert.id)
+        );
+
+        if (hasNewAlert) {
+          playAlertSound();
+        }
+      } else {
+        isInitialFetchRef.current = false;
+      }
+
+      // Update ref with current alert IDs
+      previousAlertIdsRef.current = incomingIds;
       setAlerts(data);
     } catch (error) {
       console.error("Error logging database metrics fetch:", error);
@@ -92,7 +127,6 @@ export default function AlertsManagement() {
   }, [selectedSite, selectedAlertType, date, pageSize]);
 
   const handleOpenPreview = (imageUrl: string) => {
-    // --- UPDATED: Standardizes paths starting with /upload ---
     const fullImageUrl = imageUrl.startsWith("/upload") 
       ? `${window.location.origin}${imageUrl}` 
       : imageUrl;
@@ -118,7 +152,7 @@ export default function AlertsManagement() {
     return matchesSite && matchesType && matchesDate;
   });
 
-  // Helper helper function to convert string timestamp formats cleanly for CSV output rows
+  // Helper function to convert string timestamp formats cleanly for CSV output rows
   const formatTimestamp = (timestampString: string) => {
     if (!timestampString) return "N/A";
     const [datePart, timePart] = timestampString.split(" ");
@@ -363,7 +397,6 @@ export default function AlertsManagement() {
                 alt="Alert snapshot capture" 
                 className="max-w-full max-h-[70vh] object-contain rounded"
                 onError={(e) => {
-                  // --- UPDATED: Graceful recovery if local image lookup breaks ---
                   (e.target as HTMLImageElement).src = "/upload/static/not_found.png";
                 }}
               />

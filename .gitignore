@@ -1,0 +1,7 @@
+node_modules/
+__pycache__/
+*.pyc
+routes/__pycache__/
+upload/dynamic/
+.env
+*.log

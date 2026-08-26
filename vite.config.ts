@@ -14,12 +14,12 @@ export default defineConfig(({ mode }) => ({
     
     proxy: {
       "/api": {
-        target: "http://192.168.75.249:8000",
+        target: "http://192.168.3.157:8000",
         changeOrigin: true,
         secure: false,
       },
       "/static": {
-        target: "http://192.168.75.249:8000",
+        target: "http://192.168.3.157:8000",
         changeOrigin: true,
         secure: false,
       },
