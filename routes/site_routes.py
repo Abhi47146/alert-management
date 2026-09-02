@@ -1,12 +1,17 @@
-from flask import Blueprint, request, jsonify
+import configparser
+import io
+from flask import Blueprint, request, jsonify, Response
 from db import db
 
 site_bp = Blueprint("site_bp", __name__)
 
-# Create site
+# Default portal URL constant for all solar sites
+DEFAULT_SOLAR_URL = "https://v.dvr163.com/?type=truecloud#/login"
+
+
+# --- CREATE SITE ---
 @site_bp.route("/sites", methods=["POST"])
 def create_site():
-
     data = request.json
     cursor = db.cursor()
 
@@ -18,12 +23,14 @@ def create_site():
             location_lat,
             location_lng,
             address,
+            email,
+            password,
             is_active,
             created_by
         )
         VALUES
         (
-            %s,%s,%s,%s,%s,%s
+            %s, %s, %s, %s, %s, %s, %s, %s
         )
         RETURNING id
         """,
@@ -32,6 +39,8 @@ def create_site():
             data.get("location_lat"),
             data.get("location_lng"),
             data.get("address"),
+            data.get("email"),     # Nullable for RTSP sites
+            data.get("password"),  # Nullable for RTSP sites
             data.get("is_active", True),
             data.get("created_by")
         )
@@ -42,6 +51,7 @@ def create_site():
         site_id = row['id']
     else:
         return {"error": "Database did not return a UUID"}, 500
+        
     db.commit()
 
     return jsonify({
@@ -49,10 +59,10 @@ def create_site():
         "id": str(site_id)
     })
 
-# Get All sites
+
+# --- GET ALL SITES ---
 @site_bp.route("/sites", methods=["GET"])
 def get_sites():
-
     cursor = db.cursor()
 
     cursor.execute(
@@ -63,6 +73,8 @@ def get_sites():
             s.location_lat,
             s.location_lng,
             s.address,
+            s.email,
+            s.password,
             s.is_active,
             s.created_at,
             u.name AS created_by_name
@@ -74,13 +86,12 @@ def get_sites():
     )
 
     sites = cursor.fetchall()
-
     return jsonify(sites)
 
-# Get site by id
+
+# --- GET SITE BY ID ---
 @site_bp.route("/sites/<string:site_id>", methods=["GET"])
 def get_site(site_id):
-
     cursor = db.cursor()
 
     cursor.execute(
@@ -91,6 +102,8 @@ def get_site(site_id):
             s.location_lat,
             s.location_lng,
             s.address,
+            s.email,
+            s.password,
             s.is_active,
             s.created_at,
             u.name AS created_by_name
@@ -111,12 +124,11 @@ def get_site(site_id):
 
     return jsonify(site)
 
-# update site
+
+# --- UPDATE SITE ---
 @site_bp.route("/sites/<string:site_id>", methods=["PUT"])
 def update_site(site_id):
-
     data = request.json
-
     cursor = db.cursor()
 
     cursor.execute(
@@ -127,6 +139,8 @@ def update_site(site_id):
             location_lat=%s,
             location_lng=%s,
             address=%s,
+            email=%s,
+            password=%s,
             is_active=%s
         WHERE id=%s
         """,
@@ -135,6 +149,8 @@ def update_site(site_id):
             data.get("location_lat"),
             data.get("location_lng"),
             data.get("address"),
+            data.get("email"),
+            data.get("password"),
             data.get("is_active", True),
             site_id
         )
@@ -146,10 +162,10 @@ def update_site(site_id):
         "message": "Site updated successfully"
     })
 
-# delete site
+
+# --- DELETE SITE (DEACTIVATE) ---
 @site_bp.route("/sites/<string:site_id>", methods=["DELETE"])
 def delete_site(site_id):
-
     cursor = db.cursor()
 
     cursor.execute(
@@ -167,10 +183,10 @@ def delete_site(site_id):
         "message": "Site deactivated successfully"
     })
 
-# get active sites
+
+# --- GET ACTIVE SITES ---
 @site_bp.route("/sites/active", methods=["GET"])
 def get_active_sites():
-
     cursor = db.cursor()
 
     cursor.execute(
@@ -180,7 +196,9 @@ def get_active_sites():
             name,
             location_lat,
             location_lng,
-            address
+            address,
+            email,
+            password
         FROM sites
         WHERE is_active = TRUE
         ORDER BY name
@@ -188,13 +206,12 @@ def get_active_sites():
     )
 
     sites = cursor.fetchall()
-
     return jsonify(sites)
 
-# get site recipients
+
+# --- GET SITE RECIPIENTS ---
 @site_bp.route("/sites/<string:site_id>/recipients", methods=["GET"])
 def get_site_recipients(site_id):
-
     cursor = db.cursor()
 
     cursor.execute(
@@ -213,5 +230,50 @@ def get_site_recipients(site_id):
     )
 
     recipients = cursor.fetchall()
-
     return jsonify(recipients)
+
+
+# --- DYNAMIC INI CONFIG GENERATION FOR SOLAR SITES ---
+@site_bp.route("/sites/config", methods=["GET"])
+def generate_solar_config():
+    """
+    Fetches active solar sites (where email and password are not NULL)
+    and generates an INI file injecting the DEFAULT_SOLAR_URL dynamically.
+    """
+    cursor = db.cursor()
+
+    cursor.execute(
+        """
+        SELECT name, email, password
+        FROM sites
+        WHERE is_active = TRUE
+          AND email IS NOT NULL
+          AND password IS NOT NULL
+        ORDER BY created_at ASC
+        """
+    )
+
+    solar_sites = cursor.fetchall()
+
+    config = configparser.ConfigParser()
+    
+    # Comma-separated list of actual site names
+    site_names = [site["name"] for site in solar_sites]
+    config["sites"] = {
+        "names": ", ".join(site_names)
+    }
+
+    # Add dynamic section for each solar site using DEFAULT_SOLAR_URL
+    for site in solar_sites:
+        site_name = site["name"]
+        config[site_name] = {
+            "url": DEFAULT_SOLAR_URL,
+            "email": site["email"],
+            "password": site["password"]
+        }
+
+    # Output formatted INI as plain text response
+    buf = io.StringIO()
+    config.write(buf)
+
+    return Response(buf.getvalue(), mimetype="text/plain")

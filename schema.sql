@@ -66,6 +66,8 @@ CREATE TABLE sites (
     location_lat DECIMAL(10,7),
     location_lng DECIMAL(10,7),
     address TEXT,
+    email VARCHAR(255) DEFAULT NULL,
+    password VARCHAR(255) DEFAULT NULL,
     is_active BOOLEAN DEFAULT TRUE,
     created_by UUID,
     created_at TIMESTAMPTZ DEFAULT NOW(),

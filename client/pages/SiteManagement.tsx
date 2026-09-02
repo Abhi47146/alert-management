@@ -2,7 +2,7 @@ import Layout from "@/components/Layout";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Edit2, Trash2, Plus, Search, UserPlus, Users, Eye } from "lucide-react";
+import { Edit2, Trash2, Plus, Search, UserPlus, Users } from "lucide-react";
 import { useState, useEffect } from "react";
 import {
   Dialog,
@@ -20,6 +20,8 @@ interface Site {
   location_lat: number | string | null;
   location_lng: number | string | null;
   address: string | null;
+  email?: string | null;
+  password?: string | null;
   is_active: boolean;
   recipient_name?: string;
   recipient_phone?: string;
@@ -38,33 +40,29 @@ export default function SiteManagement() {
   const [open, setOpen] = useState(false);
   const [isEdit, setIsEdit] = useState(false);
   const [editingSiteId, setEditingSiteId] = useState<string | null>(null);
-  
-  // Secondary Recipient Viewer State
+
   const [viewingSecondaries, setViewingSecondaries] = useState<Recipient[]>([]);
   const [viewSecondariesOpen, setViewSecondariesOpen] = useState(false);
   const [viewingSiteName, setViewingSiteName] = useState("");
 
-  // Form input states
   const [siteName, setSiteName] = useState("");
   const [latitude, setLatitude] = useState("");
   const [longitude, setLongitude] = useState("");
   const [address, setAddress] = useState("");
-  
-  // Primary Recipient info states
+
+  // Optional Solar Credentials state
+  const [solarEmail, setSolarEmail] = useState("");
+  const [solarPassword, setSolarPassword] = useState("");
+
   const [recipientName, setRecipientName] = useState("");
   const [recipientPhone, setRecipientPhone] = useState("");
   const [recipientEmail, setRecipientEmail] = useState("");
 
-  // Multiple Secondary Recipients tracking state
   const [secondaryRecipients, setSecondaryRecipients] = useState<Omit<Recipient, "site_id" | "is_primary">[]>([]);
-
   const [loading, setLoading] = useState(false);
-  
-  // Data State matrices
+
   const [sites, setSites] = useState<Site[]>([]);
   const [recipients, setRecipients] = useState<Recipient[]>([]);
-  
-  // Table Filter States
   const [searchQuery, setSearchQuery] = useState("");
 
   const fetchData = async () => {
@@ -107,7 +105,7 @@ export default function SiteManagement() {
   }, []);
 
   const handleDeleteSite = async (siteId: string) => {
-    if (!window.confirm("Are you sure you want to deactivate this surveillance site?")) return;
+    if (!window.confirm("Are you sure you want to deactivate this site?")) return;
 
     try {
       const response = await fetch(`/api/sites/${siteId}`, {
@@ -132,7 +130,10 @@ export default function SiteManagement() {
     setLatitude(site.location_lat?.toString() || "");
     setLongitude(site.location_lng?.toString() || "");
     setAddress(site.address || "");
-    
+
+    setSolarEmail(site.email || "");
+    setSolarPassword(site.password || "");
+
     const primary = recipients.find(r => r.site_id === site.id && r.is_primary);
     setRecipientName(primary ? primary.name : "");
     setRecipientPhone(primary ? primary.phone : "");
@@ -163,6 +164,8 @@ export default function SiteManagement() {
     setLatitude("");
     setLongitude("");
     setAddress("");
+    setSolarEmail("");
+    setSolarPassword("");
     setRecipientName("");
     setRecipientPhone("");
     setRecipientEmail("");
@@ -186,9 +189,8 @@ export default function SiteManagement() {
   const handleFormSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    // REGEX SPACE CONSOLIDATOR AND CASE NORMALIZATION ENGINE
     const normalizedInputName = siteName.trim().replace(/\s+/g, " ").toLowerCase();
-    
+
     const isDuplicate = sites.some(site => {
       const isSameSiteEntity = isEdit && site.id === editingSiteId;
       const normalizedExistingName = site.name.trim().replace(/\s+/g, " ").toLowerCase();
@@ -196,7 +198,7 @@ export default function SiteManagement() {
     });
 
     if (isDuplicate) {
-      alert(`Validation Error: A site node with the configuration layout matching "${siteName.trim()}" already exists.`);
+      alert(`Validation Error: A site with the name "${siteName.trim()}" already exists.`);
       return;
     }
 
@@ -207,6 +209,8 @@ export default function SiteManagement() {
       location_lat: latitude ? parseFloat(latitude) : null,
       location_lng: longitude ? parseFloat(longitude) : null,
       address: address || null,
+      email: solarEmail.trim() || null,
+      password: solarPassword.trim() || null,
       is_active: true
     };
 
@@ -221,7 +225,7 @@ export default function SiteManagement() {
       });
 
       if (!siteResponse.ok) throw new Error("Failed site entity assignment");
-      
+
       const siteResult = await siteResponse.json();
       const finalSiteId = isEdit ? editingSiteId : siteResult.id;
 
@@ -281,7 +285,7 @@ export default function SiteManagement() {
   };
 
   const filteredSites = sites.filter((site) => {
-    return searchQuery.trim() === "" || 
+    return searchQuery.trim() === "" ||
       site.name.toLowerCase().includes(searchQuery.toLowerCase().trim());
   });
 
@@ -291,9 +295,9 @@ export default function SiteManagement() {
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Site Management</h1>
-            <p className="text-sm font-medium text-muted-foreground">Manage all surveillance sites and configurations</p>
+            <p className="text-sm font-medium text-muted-foreground">Manage surveillance sites and credentials</p>
           </div>
-          
+
           <Dialog open={open} onOpenChange={(isOpen) => { setOpen(isOpen); if(!isOpen) resetForm(); }}>
             <DialogTrigger asChild>
               <Button className="bg-blue-600 hover:bg-blue-700 text-white" onClick={() => setIsEdit(false)}>
@@ -308,7 +312,7 @@ export default function SiteManagement() {
                   {isEdit ? "Update Site Configuration" : "Add New Site Node"}
                 </DialogTitle>
                 <DialogDescription className="text-gray-500 dark:text-gray-400">
-                  Fill out fields to provision surveillance locations and assign recipients.
+                  Fill out location data, optional solar portal credentials, and site contacts.
                 </DialogDescription>
               </DialogHeader>
 
@@ -319,7 +323,7 @@ export default function SiteManagement() {
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Site Name</label>
                     <Input
                       type="text"
-                      placeholder="e.g., Perimeter North 01"
+                      placeholder="e.g., site1"
                       value={siteName}
                       onChange={(e) => setSiteName(e.target.value)}
                       required
@@ -357,9 +361,35 @@ export default function SiteManagement() {
                   />
                 </div>
 
+                {/* SOLAR CREDENTIALS FORM INPUTS WITH BLUE HEADER */}
+                <hr className="my-4 border-gray-100 dark:border-zinc-800" />
+                <h3 className="text-sm font-semibold text-blue-600 dark:text-blue-400 uppercase tracking-wider">
+                  Solar Credentials (Optional)
+                </h3>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Portal Email</label>
+                    <Input
+                      type="email"
+                      placeholder="user@example.com"
+                      value={solarEmail}
+                      onChange={(e) => setSolarEmail(e.target.value)}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Portal Password</label>
+                    <Input
+                      type="password"
+                      placeholder="••••••••"
+                      value={solarPassword}
+                      onChange={(e) => setSolarPassword(e.target.value)}
+                    />
+                  </div>
+                </div>
+
                 <hr className="my-4 border-gray-100 dark:border-zinc-800" />
                 <h3 className="text-sm font-semibold text-blue-600 dark:text-blue-400 uppercase tracking-wider">Primary Site Recipient</h3>
-                
+
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Recipient Name</label>
@@ -472,9 +502,9 @@ export default function SiteManagement() {
         <div className="flex gap-4 items-center">
           <div className="relative flex-1">
             <Search className="absolute left-3 top-2.5 h-4 w-4 text-gray-400 dark:text-gray-500" />
-            <Input 
-              placeholder="Search by Site Name..." 
-              className="pl-9" 
+            <Input
+              placeholder="Search by Site Name..."
+              className="pl-9"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
             />
@@ -489,7 +519,7 @@ export default function SiteManagement() {
                 <th className="px-6 py-3 text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider">Latitude</th>
                 <th className="px-6 py-3 text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider">Longitude</th>
                 <th className="px-6 py-3 text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider">Primary Recipient</th>
-                <th className="px-6 py-3 text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider">Secondary Site Recipients</th>
+                <th className="px-6 py-3 text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider">Secondary Recipients</th>
                 <th className="px-6 py-3 text-right text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider">Actions</th>
               </tr>
             </thead>
@@ -503,18 +533,25 @@ export default function SiteManagement() {
               ) : (
                 filteredSites.map((site, idx) => {
                   const secondaryCount = recipients.filter(r => r.site_id === site.id && !r.is_primary).length;
+
                   return (
                     <tr key={site.id || idx} className="hover:bg-gray-50 dark:hover:bg-zinc-800/50 transition-colors">
                       <td className="px-6 py-4 text-sm font-semibold text-gray-900 dark:text-gray-100 max-w-[160px] truncate">
                         {site.name}
                       </td>
 
+                      {/* INDIVIDUAL LATITUDE COLUMN */}
                       <td className="px-6 py-4 font-mono text-xs text-gray-600 dark:text-gray-400">
-                        {site.location_lat !== null ? Number(site.location_lat).toFixed(2) : "N/A"}
+                        {site.location_lat !== null && site.location_lat !== undefined
+                          ? Number(site.location_lat).toFixed(4)
+                          : "N/A"}
                       </td>
 
+                      {/* INDIVIDUAL LONGITUDE COLUMN */}
                       <td className="px-6 py-4 font-mono text-xs text-gray-600 dark:text-gray-400">
-                        {site.location_lng !== null ? Number(site.location_lng).toFixed(2) : "N/A"}
+                        {site.location_lng !== null && site.location_lng !== undefined
+                          ? Number(site.location_lng).toFixed(4)
+                          : "N/A"}
                       </td>
 
                       <td className="px-6 py-4 text-sm text-gray-700 dark:text-gray-300">
@@ -522,7 +559,6 @@ export default function SiteManagement() {
                         <div className="text-xs text-gray-400 font-mono">{site.recipient_phone}</div>
                       </td>
 
-                      {/* COLUMN SHOWING SECONDARY RECIPIENT COUNT + TOGGLE PREVIEW ACTION BUTTON */}
                       <td className="px-6 py-4 text-sm">
                         {secondaryCount > 0 ? (
                           <Button
@@ -570,7 +606,6 @@ export default function SiteManagement() {
         </Card>
       </div>
 
-      {/* POPUP SUB-DIALOG MODAL DISPLAYING SECONDARY PROFILE DATA FIELDS */}
       <Dialog open={viewSecondariesOpen} onOpenChange={setViewSecondariesOpen}>
         <DialogContent className="sm:max-w-[500px] bg-white dark:bg-zinc-900 border-gray-200 dark:border-zinc-800">
           <DialogHeader>
@@ -581,8 +616,8 @@ export default function SiteManagement() {
           </DialogHeader>
           <div className="mt-2 max-h-[50vh] overflow-y-auto space-y-3 p-1">
             {viewingSecondaries.map((rec, index) => (
-              <div 
-                key={rec.id || index} 
+              <div
+                key={rec.id || index}
                 className="p-3 rounded-xl border border-gray-100 dark:border-zinc-800 bg-gray-50/50 dark:bg-zinc-900/50 space-y-1"
               >
                 <div className="text-sm font-semibold text-gray-900 dark:text-gray-100">{rec.name}</div>
