@@ -88,55 +88,47 @@ export default function CameraManagement() {
   };
 
   // Safe parser for interval JSON strings, arrays, or legacy strings
-const parseMonitoringIntervals = (camera: Camera): TimeInterval[] => {
-  // Read from monitoring_time first, then fallback to monitoring_start_time
-  const rawData = camera.monitoring_time || camera.monitoring_start_time;
+  const parseMonitoringIntervals = (camera: any): TimeInterval[] => {
+    const rawData = camera.monitoring_time || camera.monitoring_start_time;
 
-  if (!rawData) return [{ start: "", end: "" }];
+    if (!rawData) return [{ start: "", end: "" }];
 
-  // If already an Array of objects
-  if (Array.isArray(rawData)) {
-    return rawData.length > 0 ? rawData : [{ start: "", end: "" }];
-  }
+    if (Array.isArray(rawData)) {
+      return rawData.length > 0 ? rawData : [{ start: "", end: "" }];
+    }
 
-  // If returned as a JSON string
-  if (typeof rawData === "string") {
-    try {
-      const parsed = JSON.parse(rawData);
-      if (Array.isArray(parsed)) {
-        return parsed.length > 0 ? parsed : [{ start: "", end: "" }];
-      }
-    } catch (e) {
-      // Fallback for legacy single-time strings
-      if (camera.monitoring_start_time || camera.monitoring_end_time) {
-        return [
-          {
-            start: String(camera.monitoring_start_time || ""),
-            end: String(camera.monitoring_end_time || ""),
-          },
-        ];
+    if (typeof rawData === "string") {
+      try {
+        const parsed = JSON.parse(rawData);
+        if (Array.isArray(parsed)) {
+          return parsed.length > 0 ? parsed : [{ start: "", end: "" }];
+        }
+      } catch (e) {
+        if (camera.monitoring_start_time || camera.monitoring_end_time) {
+          return [
+            {
+              start: String(camera.monitoring_start_time || ""),
+              end: String(camera.monitoring_end_time || ""),
+            },
+          ];
+        }
       }
     }
-  }
 
-  return [{ start: "", end: "" }];
-};
+    return [{ start: "", end: "" }];
+  };
 
-  // Helper to convert "HH:MM" string to minutes past midnight
   const timeToMinutes = (timeStr: string): number => {
     if (!timeStr) return 0;
     const [hours, minutes] = timeStr.split(":").map(Number);
     return hours * 60 + minutes;
   };
 
-  // Validation function for checking valid and non-overlapping intervals
   const validateIntervals = (intervalList: TimeInterval[]): boolean => {
-    // 1. Filter out completely empty rows
     const filledIntervals = intervalList.filter((i) => i.start || i.end);
 
-    if (filledIntervals.length === 0) return true; // Allowed (means 24/7 monitoring)
+    if (filledIntervals.length === 0) return true;
 
-    // 2. Ensure each row has both Start and End times completed
     for (let i = 0; i < filledIntervals.length; i++) {
       const slot = filledIntervals[i];
       if (!slot.start || !slot.end) {
@@ -155,7 +147,6 @@ const parseMonitoringIntervals = (camera: Camera): TimeInterval[] => {
       }
     }
 
-    // 3. Check for overlaps across different interval slots
     for (let i = 0; i < filledIntervals.length; i++) {
       for (let j = i + 1; j < filledIntervals.length; j++) {
         const startA = timeToMinutes(filledIntervals[i].start);
@@ -163,7 +154,6 @@ const parseMonitoringIntervals = (camera: Camera): TimeInterval[] => {
         const startB = timeToMinutes(filledIntervals[j].start);
         const endB = timeToMinutes(filledIntervals[j].end);
 
-        // Overlap condition logic
         if (startA < endB && endA > startB) {
           alert(
             `Overlapping time schedule detected!\n\nSchedule #${i + 1} (${filledIntervals[i].start} - ${filledIntervals[i].end}) conflicts with Schedule #${j + 1} (${filledIntervals[j].start} - ${filledIntervals[j].end}).\n\nPlease resolve the time collision.`
@@ -228,16 +218,42 @@ const parseMonitoringIntervals = (camera: Camera): TimeInterval[] => {
     });
   };
 
-  const openEditModal = (camera: Camera) => {
+  const openEditModal = async (camera: Camera) => {
     setIsEdit(true);
     setEditingCameraId(camera.id);
-    setCameraScn(camera.camera_scn || "");
-    setCameraName(camera.name || "");
-    setSelectedSiteId(camera.site_id || "");
-    setStreamUrl(camera.stream_url || "");
-    setIpAddress(camera.ip_address || "");
-    setPassword("");
-    setIntervals(parseMonitoringIntervals(camera));
+
+    try {
+      const res = await fetch(`/api/cameras/${camera.id}`);
+      if (res.ok) {
+        const fullCamera = await res.json();
+        setCameraScn(fullCamera.camera_scn || "");
+        setCameraName(fullCamera.name || "");
+        setSelectedSiteId(fullCamera.site_id || "");
+        setStreamUrl(fullCamera.stream_url || "");
+        setIpAddress(fullCamera.ip_address || "");
+        setPassword("");
+        setIntervals(parseMonitoringIntervals(fullCamera));
+      } else {
+        // Fallback to table data if request fails
+        setCameraScn(camera.camera_scn || "");
+        setCameraName(camera.name || "");
+        setSelectedSiteId(camera.site_id || "");
+        setStreamUrl(camera.stream_url || "");
+        setIpAddress(camera.ip_address || "");
+        setPassword("");
+        setIntervals(parseMonitoringIntervals(camera));
+      }
+    } catch (error) {
+      console.error("Error fetching camera details:", error);
+      setCameraScn(camera.camera_scn || "");
+      setCameraName(camera.name || "");
+      setSelectedSiteId(camera.site_id || "");
+      setStreamUrl(camera.stream_url || "");
+      setIpAddress(camera.ip_address || "");
+      setPassword("");
+      setIntervals(parseMonitoringIntervals(camera));
+    }
+
     setOpen(true);
   };
 
@@ -261,9 +277,8 @@ const parseMonitoringIntervals = (camera: Camera): TimeInterval[] => {
   const handleFormSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    // OVERLAP VALIDATION CHECK
     if (!validateIntervals(intervals)) {
-      return; // Stops execution and prevents form submission
+      return;
     }
 
     setLoading(true);
@@ -407,7 +422,6 @@ const parseMonitoringIntervals = (camera: Camera): TimeInterval[] => {
                       placeholder="rtsp://admin:pass@192.168.1.50:554/stream1"
                       value={streamUrl}
                       onChange={(e) => setStreamUrl(e.target.value)}
-                      required
                     />
                   </div>
                 </div>

@@ -236,7 +236,7 @@ def update_camera(camera_id):
             name = COALESCE(%s, name),
             site_id = COALESCE(%s, site_id),
             alert_type_id = COALESCE(%s, alert_type_id),
-            stream_url = %s,
+            stream_url = COALESCE(%s, stream_url),
             ip_address = COALESCE(%s, ip_address),
             username = COALESCE(%s, username),
             password_encrypted = COALESCE(%s, password_encrypted),
