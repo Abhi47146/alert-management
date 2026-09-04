@@ -364,7 +364,7 @@ export default function SiteManagement() {
                 {/* SOLAR CREDENTIALS FORM INPUTS WITH BLUE HEADER */}
                 <hr className="my-4 border-gray-100 dark:border-zinc-800" />
                 <h3 className="text-sm font-semibold text-blue-600 dark:text-blue-400 uppercase tracking-wider">
-                  Solar Credentials (solar sites only)
+                  Solar Credentials (For solar cameras only)
                 </h3>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
