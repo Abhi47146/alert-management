@@ -8,6 +8,7 @@ import time
 from flask import Blueprint, request, jsonify
 from db import db
 from configparser import ConfigParser
+from psycopg2 import sql
 
 kerberos_bp = Blueprint('kerberos_bp', __name__)
 
@@ -18,6 +19,7 @@ MEDIAMTX_YML_PATH = conf.get("File_Path", "MEDIAMTX_YML_PATH")
 CONFIG_TS_PATH = conf.get("File_Path", "CONFIG_TS_PATH")
 MEDIAMTX_API_URL = conf.get("File_Path", "MEDIAMTX_API_URL")
 RECORDING_DIRECTORY = conf.get("File_Path", "RECORDING_DIRECTORY")
+SCHEMA_NAME = conf.get('DATABASE', 'db_schema', fallback=conf.get('DATABASE', 'db_user', fallback='public'))
 MEDIAMTX_CONTAINER_NAME = "mediamtx"  
 
 
@@ -184,7 +186,10 @@ def create_camera():
     cursor = db.cursor()
 
     try:
-        cursor.execute("SET search_path TO abhishek, public;")
+        set_schema_query = sql.SQL("SET search_path TO {}, public;").format(
+            sql.Identifier(SCHEMA_NAME)
+        )
+        cursor.execute(set_schema_query)
 
         cursor.execute(
             """
@@ -246,7 +251,10 @@ def get_cameras():
     cursor = db.cursor()
 
     try:
-        cursor.execute("SET search_path TO abhishek, public;")
+        set_schema_query = sql.SQL("SET search_path TO {}, public;").format(
+            sql.Identifier(SCHEMA_NAME)
+        )
+        cursor.execute(set_schema_query)
 
         cursor.execute(
             """
