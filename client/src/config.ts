@@ -98,4 +98,18 @@ export const LOCAL_CAMERAS: LocalCamera[] = [
             ipAddress: "localhost:8889",
             siteName: "Hyderabad Railway Station",
         },
+  {
+            id: "camera20",
+            name: "Camera20",
+            streamUrl: "http://localhost:8889/camera20/",
+            ipAddress: "localhost:8889",
+            siteName: "Hyderabad Railway Station",
+        },
+  {
+            id: "camera11",
+            name: "Camera11",
+            streamUrl: "http://localhost:8889/camera11/",
+            ipAddress: "localhost:8889",
+            siteName: "Hyderabad Railway Station",
+        },
 ];

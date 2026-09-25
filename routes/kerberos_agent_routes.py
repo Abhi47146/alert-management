@@ -1,5 +1,4 @@
 import os
-import re
 import requests
 import subprocess
 import configparser
@@ -12,21 +11,21 @@ from psycopg2 import sql
 
 kerberos_bp = Blueprint('kerberos_bp', __name__)
 
+# Parse configuration file
 conf = ConfigParser()
 conf.read('config.ini')
-CONFIG_INI_PATH = conf.get("File_Path", "CONFIG_INI_PATH")
-MEDIAMTX_YML_PATH = conf.get("File_Path", "MEDIAMTX_YML_PATH")
-CONFIG_TS_PATH = conf.get("File_Path", "CONFIG_TS_PATH")
-MEDIAMTX_API_URL = conf.get("File_Path", "MEDIAMTX_API_URL")
-RECORDING_DIRECTORY = conf.get("File_Path", "RECORDING_DIRECTORY")
-SCHEMA_NAME = conf.get('DATABASE', 'db_schema', fallback=conf.get('DATABASE', 'db_user', fallback='public'))
-MEDIAMTX_CONTAINER_NAME = "mediamtx"  
 
+CONFIG_INI_PATH = conf.get("File_Path", "CONFIG_INI_PATH", fallback="/app/config.ini")
+MEDIAMTX_YML_PATH = conf.get("File_Path", "MEDIAMTX_YML_PATH", fallback="/mediamtx.yml")
+RECORDING_DIRECTORY = conf.get("File_Path", "RECORDING_DIRECTORY", fallback="/home/abhishek/recordings")
+SCHEMA_NAME = conf.get('DATABASE', 'db_schema', fallback=conf.get('DATABASE', 'db_user', fallback='public'))
+MEDIAMTX_API_URL = os.getenv("MEDIAMTX_API_URL", "http://mediamtx:9997")
+MEDIAMTX_CONTAINER_NAME = "mediamtx"
 
 # 1. Update config.ini
 def update_config_ini(camera_name, agent_port, recording_path):
     config = configparser.ConfigParser()
-    config.optionxform = str 
+    config.optionxform = str
 
     if os.path.exists(CONFIG_INI_PATH):
         config.read(CONFIG_INI_PATH)
@@ -44,7 +43,6 @@ def update_config_ini(camera_name, agent_port, recording_path):
 
 # 2. Update mediamtx.yml
 def update_mediamtx_yml(camera_name, rtsp_url, recording_path=None):
-    
     data = {}
     if os.path.exists(MEDIAMTX_YML_PATH):
         with open(MEDIAMTX_YML_PATH, "r") as f:
@@ -70,77 +68,64 @@ def restart_mediamtx():
     except subprocess.CalledProcessError as e:
         print(f"[DOCKER ERROR] Failed to restart {MEDIAMTX_CONTAINER_NAME}: {e}")
 
+def get_cameras_from_mediamtx():
+    formatted_cameras = []
+    if os.path.exists(MEDIAMTX_YML_PATH):
+        try:
+            with open(MEDIAMTX_YML_PATH, "r") as f:
+                data = yaml.safe_load(f) or {}
+                paths = data.get("paths", {}) or {}
 
-# 4. Update config.ts
+                for cam_name in paths:
+                    formatted_cameras.append({
+                        "id": cam_name,
+                        "name": cam_name.capitalize(),
+                        "streamUrl": f"http://localhost:8889/{cam_name}/",
+                        "ipAddress": "localhost:8889",
+                        "siteName": "Primary Site",
+                        "status": check_mediamtx_path_status(cam_name)
+                    })
+        except (FileNotFoundError) as e:
+            print(f"[ERROR] Failed reading mediamtx.yml: {e}")
+            
+    return formatted_cameras
 
-def update_config_ts(camera_name, site_name="Primary Site"):
-    if not CONFIG_TS_PATH or not os.path.exists(CONFIG_TS_PATH):
-        print(f"[CONFIG.TS ERROR] Path does not exist or is invalid: '{CONFIG_TS_PATH}'")
-        return
-
+def get_all_mediamtx_camera_statuses():
+    
+    statuses = {}
     try:
-        with open(CONFIG_TS_PATH, "r") as f:
-            content = f.read()
-
-        stream_url = f"http://localhost:8889/{camera_name}/"
-        ip_address = "localhost:8889"
-
-        new_camera_entry = f"""  {{
-            id: "{camera_name}",
-            name: "{camera_name.capitalize()}",
-            streamUrl: "{stream_url}",
-            ipAddress: "{ip_address}",
-            siteName: "{site_name}",
-        }},"""
-
-        # Exact match check to prevent "camera1" matching inside "camera12"
-        exact_id_check = f'id: "{camera_name}"'
-        if re.search(r'\bid:\s*"' + re.escape(camera_name) + r'"\s*,', content):
-            print(f"[CONFIG.TS INFO] Camera ID '{camera_name}' already exists in config.ts")
-            return
-
-        # Flexible Regex: Matches LOCAL_CAMERAS with or without type annotations
-        pattern = r"(export\s+const\s+LOCAL_CAMERAS\s*(?::\s*[\w\[\]]+)?\s*=\s*\[)([\s\S]*?)(\];)"
-
-        match = re.search(pattern, content)
-        if match:
-            prefix = match.group(1)
-            body = match.group(2)
-            suffix = match.group(3)
-
-            # Insert new entry right before the closing bracket ];
-            updated_body = body.rstrip() + "\n" + new_camera_entry + "\n"
-            updated_content = content[:match.start()] + prefix + updated_body + suffix + content[match.end():]
-
-            with open(CONFIG_TS_PATH, "w") as f:
-                f.write(updated_content)
-
-            print(f"[CONFIG.TS SUCCESS] Successfully appended '{camera_name}' to config.ts")
+        url = f"{MEDIAMTX_API_URL}/v3/paths/list"
+        response = requests.get(url, timeout=2)
+        
+        if response.status_code == 200:
+            data = response.json()
+            items = data.get("items", [])
+            for item in items:
+                cam_name = item.get("name", "").lower()
+                # A camera is active if 'ready' is True and it has received video tracks
+                is_ready = item.get("ready", False) or item.get("available", False)
+                statuses[cam_name] = "active" if is_ready else "inactive"
         else:
-            # Fallback append before array end
-            last_bracket_idx = content.rfind("];")
-            if last_bracket_idx != -1:
-                updated_content = content[:last_bracket_idx] + new_camera_entry + "\n" + content[last_bracket_idx:]
-                with open(CONFIG_TS_PATH, "w") as f:
-                    f.write(updated_content)
-                print(f"[CONFIG.TS SUCCESS] Appended '{camera_name}' using fallback method.")
-
+            print(f"[MEDIAMTX API WARNING] Returned status code {response.status_code}")
     except Exception as e:
-        print(f"[CONFIG.TS ERROR] Exception occurred while updating config.ts: {e}")
+        print(f"[MEDIAMTX API ERROR] Could not reach MediaMTX API on port 9997: {e}")
+        
+    return statuses
 
-
-# 5. Dynamic Stream Health Status Check via MediaMTX API
 def check_mediamtx_path_status(camera_name):
+    """
+    Queries single camera status via MediaMTX v3 API (/v3/paths/get/<camera_name>).
+    """
     try:
-        url = f"{MEDIAMTX_API_URL}/v3/paths/get/{camera_name}"
-        resp = requests.get(url, timeout=2)
-        if resp.status_code == 200:
-            path_info = resp.json()
-            if path_info.get("ready", False):
+        url = f"{MEDIAMTX_API_URL}/v3/paths/get/{camera_name.lower()}"
+        response = requests.get(url, timeout=2)
+        if response.status_code == 200:
+            info = response.json()
+            if info.get("ready", False) or info.get("available", False):
                 return "active"
-    except Exception:
-        pass
-
+    except Exception as e:
+        print(f"[MEDIAMTX API ERROR] Failed checking single status for {camera_name}: {e}")
+        
     return "inactive"
 
 
@@ -154,10 +139,9 @@ def create_camera():
             return jsonify({"error": f"'{field}' is required"}), 400
 
     camera_name = data["camera_name"]
-    agent_port = int(data.get("agent_port", 1234)) 
+    agent_port = int(data.get("agent_port", 1234))
     rtsp_url = data["rtsp_url"]
     site_id = data["site_id"]
-    site_name = data.get("site_name", "Primary Site")
 
     license_slot_id = data.get("license_slot_id")
     registered_by = data.get("registered_by")
@@ -173,11 +157,11 @@ def create_camera():
         print(f"[WARNING] Skipping chmod: '{recording_path}' permission not modified.")
 
     try:
+        # Update config files and restart MediaMTX
         update_config_ini(camera_name, agent_port, recording_path)
         update_mediamtx_yml(camera_name, rtsp_url, recording_path)
         restart_mediamtx()
-        update_config_ts(camera_name, site_name)
-        time.sleep(1)  
+        time.sleep(1)
     except Exception as cfg_err:
         return jsonify({"error": f"Failed updating configs or restarting MediaMTX: {str(cfg_err)}"}), 500
 
@@ -218,7 +202,7 @@ def create_camera():
                 agent_url,
                 recording_path,
                 calculated_status,
-                True if license_slot_id else False,
+                bool(license_slot_id),
                 license_slot_id,
                 registered_by
             )
@@ -233,7 +217,7 @@ def create_camera():
         db.commit()
 
         return jsonify({
-            "message": "Camera stream & recording added successfully to MediaMTX, config.ini, and config.ts",
+            "message": "Camera stream & recording added successfully",
             "id": str(camera_id),
             "status": calculated_status,
             "agent_url": agent_url,
@@ -245,10 +229,12 @@ def create_camera():
         db.rollback()
         return jsonify({"error": f"Database error: {str(err)}"}), 500
 
-
 @kerberos_bp.route('/kerberos-cameras', methods=['GET'])
 def get_cameras():
     cursor = db.cursor()
+
+    # Fetch status mapping from MediaMTX API port 9997
+    active_statuses = get_all_mediamtx_camera_statuses()
 
     try:
         set_schema_query = sql.SQL("SET search_path TO {}, public;").format(
@@ -259,32 +245,53 @@ def get_cameras():
         cursor.execute(
             """
             SELECT
-                id,
-                name,
-                site_id,
-                stream_url,
-                agent_port,
-                agent_url,
-                recording_path,
-                status,
-                is_licensed,
-                license_slot_id,
-                registered_by,
-                deregistered_at,
-                created_at
-            FROM kerberos_cameras
-            ORDER BY created_at DESC;
+                kc.id,
+                kc.name,
+                kc.site_id,
+                s.name as site_name,
+                kc.stream_url,
+                kc.agent_port,
+                kc.agent_url,
+                kc.recording_path,
+                kc.status,
+                kc.is_licensed,
+                kc.license_slot_id,
+                kc.registered_by,
+                kc.deregistered_at,
+                kc.created_at
+            FROM kerberos_cameras kc
+            LEFT JOIN sites s ON kc.site_id = s.id
+            ORDER BY kc.created_at DESC;
             """
         )
 
         cameras = cursor.fetchall()
+        formatted_cameras = []
 
         for camera in cameras:
-            cam_name = camera.get("name")
-            if cam_name:
-                camera["status"] = check_mediamtx_path_status(cam_name)
+            cam_name = camera.get("name", "")
+            cam_key = cam_name.lower()
+            
+            # Lookup status directly from MediaMTX API output
+            live_status = active_statuses.get(cam_key, "inactive")
 
-        return jsonify(cameras), 200
+            formatted_cameras.append({
+                "id": str(camera.get("id")),
+                "name": cam_name.capitalize(),
+                "camera_name": cam_name,
+                "site_id": str(camera.get("site_id")),
+                "siteId": str(camera.get("site_id")),
+                "site_name": camera.get("site_name") or "Primary Site",
+                "siteName": camera.get("site_name") or "Primary Site",
+                "stream_url": camera.get("stream_url"),
+                "rtspUrl": camera.get("stream_url"),
+                "streamUrl": f"http://localhost:8889/{cam_key}/",
+                "status": live_status,
+                "created_at": camera.get("created_at")
+            })
+
+        return jsonify(formatted_cameras), 200
 
     except Exception as err:
-        return jsonify({"error": f"Database error: {str(err)}"}), 500
+        print(f"[DB ERROR] Falling back to mediamtx.yml: {err}")
+        return jsonify(get_cameras_from_mediamtx()), 200

@@ -1,8 +1,6 @@
 "use client";
-
-import Layout from "@/components/Layout";
 import { Card } from "@/components/ui/card";
-import { HardDrive, AlertTriangle, Cloud, Server, RefreshCw, CheckCircle } from "lucide-react";
+import { HardDrive, AlertTriangle, Cloud } from "lucide-react";
 import { useState, useEffect } from "react";
 
 interface StorageMetrics {
@@ -74,10 +72,6 @@ export default function SystemHealth() {
               return (
                 <Card key={node.node_name || index} className="p-6 bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-800/80 rounded-xl shadow-sm space-y-4">
                   <div className="flex justify-between items-start">
-                    {/* <div>
-                      <h3 className="font-bold text-gray-900 dark:text-gray-100 text-base">{node.node_name}</h3>
-                      <p className="text-xs font-mono text-gray-400 mt-0.5">Latency: {node.latency_ms}ms • Uptime: {node.uptime_percentage}%</p>
-                    </div> */}
 
                     <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold ${node.status === "Operational"
                         ? "bg-green-50 text-green-700 dark:bg-green-950/30 dark:text-green-400"
@@ -148,11 +142,6 @@ export default function SystemHealth() {
           <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">System Health Dashboard</h1>
           <p className="text-sm font-medium text-muted-foreground">Network Operations Center infrastructure telemetry feeds</p>
         </div>
-
-        <div className="flex items-center gap-2 text-xs font-medium text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/30 px-3 py-1.5 rounded-full border border-blue-200 dark:border-blue-900/50">
-          <RefreshCw size={12} className={loading ? "animate-spin" : ""} />
-          <span>{loading ? "Synchronizing Storage Parameters..." : "Live System Sync Active"}</span>
-        </div>
       </div>
 
       {loading && cloudData.length === 0 && edgeData.length === 0 ? (
@@ -168,12 +157,6 @@ export default function SystemHealth() {
             cloudData
           )}
 
-          {/* EDGE DEVICE NETWORKS HEALTH SECTION */}
-          {/* {renderHealthSection(
-              "GPU Device Health",
-              <Server className="text-emerald-500" size={22} />,
-              edgeData
-            )} */}
         </div>
       )}
     </div>

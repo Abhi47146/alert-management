@@ -1,4 +1,3 @@
-import Layout from "@/components/Layout";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -17,13 +16,15 @@ import {
 interface Camera {
   id: string;
   name: string;
-  site_id: string;
+  site_id?: string;
+  siteId?: string;
   site_name?: string;
-  stream_url: string;
-  agent_url: string;
-  recording_path: string;
+  siteName?: string;
+  stream_url?: string;
+  streamUrl?: string;
+  rtspUrl?: string;
   status: string;
-  created_at: string;
+  created_at?: string;
 }
 
 export default function CameraManagement() {
@@ -68,8 +69,9 @@ export default function CameraManagement() {
     }
   };
 
-  const getSiteName = (siteId: string) => {
-    const foundSite = sites.find((s) => s.id === siteId);
+  const getSiteName = (siteId?: string) => {
+    if (!siteId) return "N/A";
+    const foundSite = sites.find((s) => String(s.id) === String(siteId));
     return foundSite ? foundSite.name : "N/A";
   };
 
@@ -77,8 +79,8 @@ export default function CameraManagement() {
     setIsEdit(true);
     setEditingCameraId(camera.id);
     setCameraName(camera.name || "");
-    setSelectedSiteId(camera.site_id || "");
-    setStreamUrl(camera.stream_url || "");
+    setSelectedSiteId(camera.site_id || camera.siteId || "");
+    setStreamUrl(camera.stream_url || camera.streamUrl || camera.rtspUrl || "");
     setOpen(true);
   };
 
@@ -99,7 +101,7 @@ export default function CameraManagement() {
     e.preventDefault();
     setLoading(true);
 
-    const selectedSiteObj = sites.find((s) => s.id === selectedSiteId);
+    const selectedSiteObj = sites.find((s) => String(s.id) === String(selectedSiteId));
 
     const cameraPayload = {
       camera_name: cameraName,
@@ -121,7 +123,7 @@ export default function CameraManagement() {
       const resData = await response.json();
 
       if (response.ok) {
-        alert(isEdit ? "Camera updated successfully!" : "MediaMTX stream and recording configured successfully!");
+        alert(isEdit ? "Camera updated successfully!" : "MediaMTX stream configured successfully!");
         await fetchCameras();
         setOpen(false);
         resetForm();
@@ -136,18 +138,26 @@ export default function CameraManagement() {
     }
   };
 
+  // ROBUST FILTER LOGIC (Supports camelCase & snake_case)
   const filteredCameras = cameras.filter((camera) => {
+    // 1. Search Query Filter
     const matchesSearch =
       searchQuery.trim() === "" ||
       camera.name.toLowerCase().includes(searchQuery.toLowerCase().trim());
 
-    const siteNameResolved = getSiteName(camera.site_id);
+    // 2. Resolve Site Identification
+    const camSiteId = String(camera.site_id || camera.siteId || "");
+    const camSiteName = (camera.site_name || camera.siteName || getSiteName(camSiteId)).toLowerCase();
+
+    const selectedSiteObj = sites.find((s) => String(s.id) === String(filterSite));
+    const selectedSiteName = selectedSiteObj ? selectedSiteObj.name.toLowerCase() : "";
+
     const matchesSite =
       filterSite === "All Sites" ||
-      camera.site_id === filterSite ||
-      siteNameResolved === filterSite ||
-      camera.site_name === filterSite;
+      camSiteId === String(filterSite) ||
+      (selectedSiteName !== "" && camSiteName.includes(selectedSiteName));
 
+    // 3. Status Filter
     const mappedStatus = camera.status === "active" ? "Online" : "Offline";
     const matchesStatus =
       filterStatus === "All Status" ||
@@ -202,7 +212,7 @@ export default function CameraManagement() {
                 </label>
                 <Input
                   type="text"
-                  placeholder="e.g., perimeter_north_01"
+                  placeholder="e.g., camera21"
                   value={cameraName}
                   onChange={(e) => setCameraName(e.target.value)}
                   required
@@ -327,12 +337,6 @@ export default function CameraManagement() {
                 <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider">
                   Source RTSP
                 </th>
-                {/* <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider">
-                    MediaMTX HLS Live Stream
-                  </th> */}
-                {/* <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider">
-                    Recording Path
-                  </th> */}
                 <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider">
                   Status
                 </th>
@@ -341,57 +345,51 @@ export default function CameraManagement() {
             <tbody className="divide-y divide-gray-200 dark:divide-zinc-800">
               {filteredCameras.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="px-6 py-10 text-center text-gray-400 dark:text-gray-500 text-sm">
+                  <td colSpan={4} className="px-6 py-10 text-center text-gray-400 dark:text-gray-500 text-sm">
                     No active camera streams found.
                   </td>
                 </tr>
               ) : (
-                filteredCameras.map((camera) => (
-                  <tr key={camera.id} className="hover:bg-gray-50 dark:hover:bg-zinc-800/50 transition-colors">
-                    <td className="px-6 py-4 text-sm font-medium text-gray-900 dark:text-gray-100">
-                      {camera.name}
-                    </td>
+                filteredCameras.map((camera) => {
+                  const resolvedSiteName = camera.site_name || camera.siteName || getSiteName(camera.site_id || camera.siteId);
+                  const resolvedRtsp = camera.rtspUrl || camera.stream_url || camera.streamUrl || "N/A";
 
-                    <td className="px-6 py-4 text-sm font-medium text-gray-900 dark:text-gray-100">
-                      {camera.site_name || getSiteName(camera.site_id)}
-                    </td>
+                  return (
+                    <tr key={camera.id} className="hover:bg-gray-50 dark:hover:bg-zinc-800/50 transition-colors">
+                      <td className="px-6 py-4 text-sm font-medium text-gray-900 dark:text-gray-100">
+                        {camera.name}
+                      </td>
 
-                    <td
-                      className="px-6 py-4 text-sm text-gray-600 dark:text-gray-400 max-w-[200px] truncate font-mono"
-                      title={camera.stream_url}
-                    >
-                      {camera.stream_url || "N/A"}
-                    </td>
+                      <td className="px-6 py-4 text-sm font-medium text-gray-900 dark:text-gray-100">
+                        {resolvedSiteName}
+                      </td>
 
-                    {/* <td className="px-6 py-4 text-sm text-blue-600 dark:text-blue-400 font-mono">
-                        <a href={camera.agent_url} target="_blank" rel="noreferrer" className="underline">
-                          {camera.agent_url}
-                        </a>
-                      </td> */}
-
-                    {/* <td
+                      <td
                         className="px-6 py-4 text-sm text-gray-600 dark:text-gray-400 max-w-[200px] truncate font-mono"
-                        title={camera.recording_path}
+                        title={resolvedRtsp}
                       >
-                        {camera.recording_path}
-                      </td> */}
+                        {resolvedRtsp}
+                      </td>
 
-                    <td className="px-6 py-4 text-sm">
-                      <span
-                        className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium ${camera.status === "active"
-                            ? "bg-green-50 text-green-700 border border-green-200 dark:bg-green-950/30 dark:text-green-400 dark:border-green-900/50"
-                            : "bg-red-50 text-red-700 border border-red-200 dark:bg-red-950/30 dark:text-red-400 dark:border-red-900/50"
-                          }`}
-                      >
+                      <td className="px-6 py-4 text-sm">
                         <span
-                          className={`w-1.5 h-1.5 rounded-full ${camera.status === "active" ? "bg-green-500" : "bg-red-500"
+                          className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                            camera.status === "active"
+                              ? "bg-green-50 text-green-700 border border-green-200 dark:bg-green-950/30 dark:text-green-400 dark:border-green-900/50"
+                              : "bg-red-50 text-red-700 border border-red-200 dark:bg-red-950/30 dark:text-red-400 dark:border-red-900/50"
+                          }`}
+                        >
+                          <span
+                            className={`w-1.5 h-1.5 rounded-full ${
+                              camera.status === "active" ? "bg-green-500" : "bg-red-500"
                             }`}
-                        ></span>
-                        {camera.status === "active" ? "Online" : "Offline"}
-                      </span>
-                    </td>
-                  </tr>
-                ))
+                          ></span>
+                          {camera.status === "active" ? "Online" : "Offline"}
+                        </span>
+                      </td>
+                    </tr>
+                  );
+                })
               )}
             </tbody>
           </table>

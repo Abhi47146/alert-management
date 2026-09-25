@@ -78,7 +78,6 @@ pnpm build
 │   │   ├── Dashboard.tsx      # Main dashboard
 │   │   ├── CameraManagement.tsx
 │   │   ├── NVRRecordings.tsx
-│   │   ├── AlertsManagement.tsx
 │   │   ├── SystemHealth.tsx
 │   │   ├── SiteMonitoring.tsx
 │   │   └── Settings.tsx
@@ -107,6 +106,9 @@ pnpm test             # Run tests
 ```bash
 python3 app.py        # Run production server on port 5000
 ```
+### For running in docker 
+docker compose up -d --build
+
 
 ## Features
 
@@ -115,7 +117,6 @@ The DRISHYAM application includes:
 - **Dashboard** - Real-time camera and alert overview
 - **Camera Management** - Manage all surveillance cameras
 - **NVR & Recordings** - Video playback and recording management
-- **Alerts Management** - Monitor and manage security alerts
 - **System Health** - Monitor system status and performance
 - **Site Monitoring** - Site-level surveillance overview
 - **Settings** - System configuration
@@ -143,12 +144,6 @@ npm install -g pnpm
 pip install -r requirements.txt
 ```
 
-### Issue: "Port 5000 already in use"
-**Solution:** Edit `app.py` and change the port number in the last line:
-```python
-app.run(host="127.0.0.1", port=5001)  # Change 5000 to 5001
-```
-
 ### Issue: "Build folder not found"
 **Solution:** Make sure you're in the project root directory and run:
 ```bash
@@ -168,14 +163,6 @@ The application works on:
 - Firefox (latest)
 - Safari (latest)
 - Edge (latest)
-
-## Security Notes
-
-⚠️ **Development/Testing Only**
-- Default credentials are for testing purposes only
-- In production, implement proper authentication
-- Use environment variables for sensitive configuration
-- Enable HTTPS in production
 
 ## Support
 

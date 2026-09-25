@@ -14,14 +14,18 @@ export default defineConfig(({ mode }) => ({
     
     proxy: {
       "/api": {
-        target: "http://127.0.0.1:8000",
+        target: process.env.VITE_API_URL || 'http://api:8000',
         changeOrigin: true,
         secure: false,
       },
-      "/static": {
-        target: "http://127.0.0.1:8000",
+      '/hls': {
+        target: 'http://mediamtx:8888',
         changeOrigin: true,
-        secure: false,
+      },
+      // Proxy WebRTC video feeds to MediaMTX
+      '/webrtc': {
+        target: 'http://mediamtx:8889',
+        changeOrigin: true,
       },
     },
   },

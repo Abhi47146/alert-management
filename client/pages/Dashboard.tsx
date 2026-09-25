@@ -1,6 +1,5 @@
-import Layout from "@/components/Layout";
 import { Card } from "@/components/ui/card";
-import { Camera, AlertTriangle, Wifi, RefreshCw } from "lucide-react";
+import { Camera, AlertTriangle, Wifi } from "lucide-react";
 import { useEffect, useState } from "react";
 
 interface CameraItem {
@@ -60,7 +59,7 @@ export default function Dashboard() {
             System Overview
           </h1>
           <p className="text-sm font-medium text-muted-foreground">
-            Real-time operational status across all deployed camera agents
+            Real-time operational status across all deployed camera
           </p>
         </div>
 

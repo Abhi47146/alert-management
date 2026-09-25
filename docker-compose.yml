@@ -1,0 +1,49 @@
+version: '3.8'
+
+services:
+  mediamtx:
+    image: bluenviron/mediamtx:latest
+    container_name: mediamtx
+    ports:
+      - "8554:8554"   # RTSP
+      - "8888:8888"   # HLS
+      - "8889:8889"   # WebRTC
+      - "9997:9997"   # API
+    volumes:
+      - /home/abhishek/mediamtx/mediamtx.yml:/mediamtx.yml
+      - /home/abhishek/recordings:/home/abhishek/recordings
+    restart: always
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    container_name: drishyam_api
+    ports:
+      - "8000:8000"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - ./config.ini:/app/config.ini
+      - /home/abhishek/mediamtx/mediamtx.yml:/mediamtx.yml
+      - /home/abhishek/recordings:/home/abhishek/recordings
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      - DB_HOST=host.docker.internal
+      - MEDIAMTX_HLS_URL=http://mediamtx:8888
+      - MEDIAMTX_API_URL=http://mediamtx:9997
+      - CONFIG_FILE_PATH=/app/config.ini
+      - MEDIAMTX_CONFIG_PATH=/mediamtx.yml
+      - PYTHONUNBUFFERED=1
+    depends_on:
+      - mediamtx
+
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+    container_name: drishyam_frontend
+    ports:
+      - "5000:5000"
+    depends_on:
+      - api

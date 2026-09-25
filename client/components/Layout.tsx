@@ -1,6 +1,6 @@
 "use client";
 
-import { ReactNode, useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useTheme } from "next-themes";
 import {
@@ -9,12 +9,12 @@ import {
   Camera,
   MapPin,
   HardDrive,
-  AlertTriangle,
   Heart,
   Settings,
   LogOut,
   Sun,
   Moon,
+  VideoIcon,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Outlet } from "react-router-dom";
@@ -51,8 +51,7 @@ export default function Layout() {
     { icon: MapPin, label: "Site Management", path: "/site-management" },
     { icon: Camera, label: "Camera Management", path: "/camera-management" },
     { icon: HardDrive, label: "NVR & Recordings", path: "/nvr-recordings" },
-    { icon: MapPin, label: "LIVE Monitoring", path: "/live-view" },
-    //{ icon: AlertTriangle, label: "Alerts Management", path: "/alerts" },
+    { icon: VideoIcon, label: "LIVE Monitoring", path: "/live-view" },
     { icon: Heart, label: "System Health", path: "/system-health" },
     { icon: Settings, label: "Settings", path: "/settings" },
   ];
@@ -129,17 +128,6 @@ export default function Layout() {
           </button>
         </div>
 
-        {/* Sidebar Collapse Toggle button */}
-        {/* <div className="p-4 border-t border-[hsl(207,31%,28%)]">
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => setSidebarOpen(!sidebarOpen)}
-            className="w-full text-gray-400 hover:text-white hover:bg-[hsl(207,31%,28%)] bg-transparent border-none"
-          >
-            <Menu size={18} />
-          </Button>
-        </div> */}
       </div>
 
       {/* Main Content Pane */}

@@ -1,4 +1,3 @@
-import Layout from "@/components/Layout";
 import React, { useState, useEffect, useMemo } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -80,19 +79,35 @@ export default function NVRRecordings() {
   const filteredCameras = useMemo(() => {
     let result = cameras;
 
+    // Filter by site if a specific site is selected
     if (selectedSiteId) {
-      result = result.filter((cam) => cam.site_id === selectedSiteId);
+      result = result.filter((cam) => {
+        // Match either site_id or siteName/site_name text
+        const selectedSiteObj = sites.find((s) => s.id === selectedSiteId);
+        const selectedSiteName = selectedSiteObj ? selectedSiteObj.name.toLowerCase() : "";
+        
+        const camSiteId = cam.site_id ? String(cam.site_id) : "";
+        const camSiteName = (cam.site_name || "").toLowerCase();
+
+        return (
+          camSiteId === selectedSiteId ||
+          (selectedSiteName && camSiteName.includes(selectedSiteName))
+        );
+      });
     }
 
+    // Filter by typed camera name/id text
     if (cameraSearch.trim()) {
       const searchTerm = cameraSearch.toLowerCase();
-      result = result.filter((cam) =>
-        cam.name.toLowerCase().includes(searchTerm)
-      );
+      result = result.filter((cam) => {
+        const nameMatch = cam.name ? cam.name.toLowerCase().includes(searchTerm) : false;
+        const idMatch = cam.id ? cam.id.toLowerCase().includes(searchTerm) : false;
+        return nameMatch || idMatch;
+      });
     }
 
     return result;
-  }, [cameras, selectedSiteId, cameraSearch]);
+  }, [cameras, sites, selectedSiteId, cameraSearch]);
 
   const handleSiteChange = (siteId: string) => {
     setSelectedSiteId(siteId);
@@ -251,16 +266,14 @@ export default function NVRRecordings() {
               <div className="relative">
                 <Input
                   type="text"
-                  placeholder="Type to search camera..."
+                  placeholder="Type camera name (e.g., camera1)..."
                   value={cameraSearch}
-                  onFocus={() => {
-                    if (cameraSearch.trim()) setIsCameraDropdownOpen(true);
-                  }}
+                  onFocus={() => setIsCameraDropdownOpen(true)}
                   onChange={(e) => {
                     const val = e.target.value;
                     setCameraSearch(val);
                     setSelectedCameraId("");
-                    setIsCameraDropdownOpen(val.trim().length > 0);
+                    setIsCameraDropdownOpen(true);
                   }}
                   className="h-9 pr-8 bg-white dark:bg-zinc-950 border-gray-200 dark:border-zinc-800 text-sm"
                 />
