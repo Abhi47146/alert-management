@@ -1,20 +1,22 @@
+"use client";
+
 import React, { useState, useMemo, useEffect, useRef } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { LocalCamera } from "@/src/config";
+import { LocalCamera as BaseLocalCamera } from "@/src/config";
 import {
   Video,
   Grid2X2,
   Grid3X3,
   LayoutGrid,
-  AlertCircle,
   Radio,
   GripVertical,
   Maximize2,
   X,
-  ChevronsUpDown,
-  RefreshCw
+  ChevronDown,
+  RefreshCw,
+  VideoOff,
 } from "lucide-react";
 import {
   Dialog,
@@ -22,6 +24,11 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+
+// Extend BaseLocalCamera to support backend status without modifying config.ts
+interface LocalCamera extends BaseLocalCamera {
+  status?: string;
+}
 
 type GridViewMode = "single" | "2x2" | "3x3" | "4x4";
 
@@ -56,7 +63,7 @@ export default function LiveView() {
 
         if (data.length > 0 && !selectedCameraId) {
           setSelectedCameraId(data[0].id);
-          setCameraSearch(`${data[0].name} (${data[0].siteName})`);
+          setCameraSearch(`${data[0].name} (${data[0].siteName || "Primary Site"})`);
         }
       } else {
         console.error("Failed to load live cameras from backend");
@@ -177,12 +184,13 @@ export default function LiveView() {
 
   const handleSelectCamera = (camera: LocalCamera) => {
     setSelectedCameraId(camera.id);
-    setCameraSearch(`${camera.name} (${camera.siteName})`);
+    setCameraSearch(`${camera.name} (${camera.siteName || "Primary Site"})`);
     setIsCameraDropdownOpen(false);
     if (gridMode !== "single") setGridMode("single");
   };
 
-  const handleClearCameraSearch = () => {
+  const handleClearCameraSearch = (e: React.MouseEvent) => {
+    e.stopPropagation();
     setCameraSearch("");
     setSelectedCameraId("");
     setIsCameraDropdownOpen(false);
@@ -265,8 +273,6 @@ export default function LiveView() {
     }
   };
 
-  const showSuggestions = isCameraDropdownOpen && cameraSearch.trim().length > 0;
-
   return (
     <div className="space-y-6 text-gray-900 dark:text-gray-100 min-h-screen transition-colors duration-200">
 
@@ -331,7 +337,7 @@ export default function LiveView() {
         </div>
       </div>
 
-      {/* Primary Camera Searchable Selector */}
+      {/* Primary Camera Searchable Selector (Dropdown + Typing) */}
       <div className="bg-gray-50 dark:bg-zinc-900 border border-gray-200 dark:border-zinc-800 rounded-xl p-4 space-y-3">
         <div className="flex gap-4 flex-wrap items-end">
           <div className="flex flex-col gap-1 min-w-[280px] relative">
@@ -342,37 +348,40 @@ export default function LiveView() {
             <div className="relative">
               <Input
                 type="text"
-                placeholder="Type to search camera or site..."
+                placeholder="Select or type camera..."
                 value={cameraSearch}
-                onFocus={() => {
-                  if (cameraSearch.trim()) setIsCameraDropdownOpen(true);
-                }}
+                onClick={() => setIsCameraDropdownOpen(true)}
+                onFocus={() => setIsCameraDropdownOpen(true)}
                 onChange={(e) => {
                   const val = e.target.value;
                   setCameraSearch(val);
                   setSelectedCameraId("");
-                  setIsCameraDropdownOpen(val.trim().length > 0);
+                  setIsCameraDropdownOpen(true);
                 }}
-                className="h-9 pr-8 bg-white dark:bg-zinc-950 border-gray-200 dark:border-zinc-800 text-sm"
+                className="h-9 pr-14 bg-white dark:bg-zinc-950 border-gray-200 dark:border-zinc-800 text-sm cursor-pointer"
               />
 
-              {cameraSearch ? (
-                <button
-                  type="button"
-                  onClick={handleClearCameraSearch}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
-                >
-                  <X size={14} />
-                </button>
-              ) : (
-                <ChevronsUpDown
-                  size={14}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none"
+              <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1 text-gray-400">
+                {cameraSearch && (
+                  <button
+                    type="button"
+                    onClick={handleClearCameraSearch}
+                    className="hover:text-gray-600 dark:hover:text-gray-200"
+                  >
+                    <X size={14} />
+                  </button>
+                )}
+                <ChevronDown
+                  size={16}
+                  className={`cursor-pointer transition-transform ${
+                    isCameraDropdownOpen ? "rotate-180" : ""
+                  }`}
+                  onClick={() => setIsCameraDropdownOpen(!isCameraDropdownOpen)}
                 />
-              )}
+              </div>
 
-              {/* Typed Auto-Suggestions Menu */}
-              {showSuggestions && (
+              {/* Typed / Clickable Auto-Suggestions Menu */}
+              {isCameraDropdownOpen && (
                 <>
                   <div
                     className="fixed inset-0 z-10"
@@ -397,7 +406,7 @@ export default function LiveView() {
                         >
                           <span>{camera.name}</span>
                           <span className="text-[10px] text-gray-400 dark:text-gray-500 bg-gray-100 dark:bg-zinc-900 px-1.5 py-0.5 rounded font-mono">
-                            {camera.siteName}
+                            {camera.siteName || "Primary Site"}
                           </span>
                         </div>
                       ))
@@ -422,7 +431,8 @@ export default function LiveView() {
       ) : (
         <div ref={gridRef} className={`grid gap-4 ${getGridClasses(gridMode)}`}>
           {visibleCameras.map((camera, index) => {
-            const isFailed = failedStreams[camera.id];
+            // Evaluates camera status exactly like Camera Management ("active" = Online)
+            const isOffline = camera.status !== "active" || failedStreams[camera.id];
             const isBeingDragged = draggedIndex === index;
             const isTarget = dropTargetIndex === index && draggedIndex !== index;
 
@@ -445,25 +455,26 @@ export default function LiveView() {
                       : "border-zinc-800 hover:border-zinc-700"
                 }`}
               >
-                {/* Drag & Overlay Header Bar */}
+                {/* Overlay Header Bar */}
                 <div className="absolute top-3 left-3 right-3 z-20 flex items-center justify-between pointer-events-none">
                   <div className="bg-black/70 backdrop-blur-md rounded px-2.5 py-1 text-white text-[11px] flex items-center gap-2 font-mono border border-white/10">
                     <span className="relative flex h-2 w-2">
                       <span
                         className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${
-                          isFailed ? "bg-red-500" : "bg-red-400"
+                          isOffline ? "bg-red-500" : "bg-green-400"
                         }`}
                       ></span>
                       <span
                         className={`relative inline-flex rounded-full h-2 w-2 ${
-                          isFailed ? "bg-red-500" : "bg-green-500"
+                          isOffline ? "bg-red-500" : "bg-green-500"
                         }`}
                       ></span>
                     </span>
-                    {camera.name} {isFailed && <span className="text-red-400 font-bold">(Offline)</span>}
+                    <span>{camera.name}</span>
+                    {isOffline && <span className="text-red-400 font-bold">(Offline)</span>}
                   </div>
 
-                  {/* Top Right Action Controls: Enlarge + Drag indicator */}
+                  {/* Top Right Controls */}
                   <div className="flex items-center gap-1.5 pointer-events-auto">
                     <button
                       type="button"
@@ -488,27 +499,27 @@ export default function LiveView() {
 
                 {/* Stream Viewport Container */}
                 <div className="relative aspect-video bg-zinc-900 flex items-center justify-center overflow-hidden">
-                  {isFailed ? (
-                    <div className="flex flex-col items-center justify-center p-6 text-center text-zinc-500 space-y-2 pointer-events-auto">
-                      <AlertCircle className="h-8 w-8 text-red-500" />
-                      <p className="text-xs font-medium text-zinc-300">
-                        Stream Connection Failed
+                  {isOffline ? (
+                    <div className="flex flex-col items-center justify-center p-6 text-center text-zinc-500 space-y-2 pointer-events-auto bg-zinc-950/90 w-full h-full">
+                      <VideoOff className="h-10 w-10 text-red-500/80 mb-1" />
+                      <p className="text-sm font-semibold text-red-400">
+                        Camera Offline / Stream Not Found
                       </p>
-                      <p className="text-[10px] text-zinc-500 font-mono truncate max-w-[240px]">
-                        {camera.streamUrl}
-                      </p>
+                      {/* <p className="text-[11px] text-zinc-400 font-mono truncate max-w-[260px]">
+                        {camera.streamUrl || "Path not configured in MediaMTX"}
+                      </p> */}
                       <Button
                         size="sm"
                         variant="outline"
                         onClick={() => handleRetryStream(camera.id)}
                         className="h-7 text-[11px] mt-2 border-zinc-700 bg-zinc-900 hover:bg-zinc-800 text-zinc-200"
                       >
-                        Reconnect
+                        <RefreshCw size={12} className="mr-1.5" /> Retry Connection
                       </Button>
                     </div>
                   ) : (
                     <iframe
-                      key={`${camera.id}-${isFailed}`}
+                      key={`${camera.id}-${isOffline}`}
                       src={camera.streamUrl}
                       title={`Live Stream - ${camera.name}`}
                       className="w-full h-full border-0 bg-black pointer-events-none"
@@ -522,7 +533,7 @@ export default function LiveView() {
                 <div className="p-3 bg-zinc-900/90 border-t border-zinc-800 flex items-center justify-between text-[11px] text-zinc-400">
                   <div className="flex items-center gap-2 truncate">
                     <Video size={12} className="text-blue-400 shrink-0" />
-                    <span className="truncate">{camera.siteName}</span>
+                    <span className="truncate">{camera.siteName || "Primary Site"}</span>
                   </div>
                 </div>
               </Card>
@@ -539,12 +550,16 @@ export default function LiveView() {
               <span className="relative flex h-2.5 w-2.5">
                 <span
                   className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${
-                    enlargedCamera && failedStreams[enlargedCamera.id] ? "bg-red-500" : "bg-red-400"
+                    enlargedCamera && (enlargedCamera.status !== "active" || failedStreams[enlargedCamera.id])
+                      ? "bg-red-500"
+                      : "bg-green-400"
                   }`}
                 ></span>
                 <span
                   className={`relative inline-flex rounded-full h-2.5 w-2.5 ${
-                    enlargedCamera && failedStreams[enlargedCamera.id] ? "bg-red-500" : "bg-green-500"
+                    enlargedCamera && (enlargedCamera.status !== "active" || failedStreams[enlargedCamera.id])
+                      ? "bg-red-500"
+                      : "bg-green-500"
                   }`}
                 ></span>
               </span>
@@ -554,19 +569,28 @@ export default function LiveView() {
 
           <div className="relative aspect-video w-full bg-black flex items-center justify-center">
             {enlargedCamera && (
-              <iframe
-                src={enlargedCamera.streamUrl}
-                title={`Enlarged Feed - ${enlargedCamera.name}`}
-                className="w-full h-full border-0"
-                allow="autoplay; camera; microphone; fullscreen"
-              />
+              enlargedCamera.status !== "active" || failedStreams[enlargedCamera.id] ? (
+                <div className="flex flex-col items-center justify-center p-6 text-center text-zinc-500 space-y-2">
+                  <VideoOff className="h-12 w-12 text-red-500 mb-2" />
+                  <p className="text-base font-semibold text-red-400">
+                    Camera Stream Currently Unavailable
+                  </p>
+                </div>
+              ) : (
+                <iframe
+                  src={enlargedCamera.streamUrl}
+                  title={`Enlarged Feed - ${enlargedCamera.name}`}
+                  className="w-full h-full border-0"
+                  allow="autoplay; camera; microphone; fullscreen"
+                />
+              )
             )}
           </div>
 
           <div className="p-4 bg-zinc-900 border-t border-zinc-800 flex items-center justify-between text-xs text-zinc-400 font-mono">
             <div className="flex items-center gap-2">
               <Video size={14} className="text-blue-400" />
-              <span>Site Location: <strong className="text-zinc-200">{enlargedCamera?.siteName}</strong></span>
+              <span>Site Location: <strong className="text-zinc-200">{enlargedCamera?.siteName || "Primary Site"}</strong></span>
             </div>
           </div>
         </DialogContent>

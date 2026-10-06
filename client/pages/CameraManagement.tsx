@@ -1,7 +1,9 @@
+"use client";
+
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Plus, Search } from "lucide-react";
+import { Plus, Search, Edit2, Trash2 } from "lucide-react";
 import { useState, useEffect } from "react";
 import {
   Dialog,
@@ -78,10 +80,32 @@ export default function CameraManagement() {
   const openEditModal = (camera: Camera) => {
     setIsEdit(true);
     setEditingCameraId(camera.id);
+    // Preserves original casing when loading for edit
     setCameraName(camera.name || "");
     setSelectedSiteId(camera.site_id || camera.siteId || "");
     setStreamUrl(camera.stream_url || camera.streamUrl || camera.rtspUrl || "");
     setOpen(true);
+  };
+
+  const handleDeleteCamera = async (cameraId: string) => {
+    if (!window.confirm("Are you sure you want to delete this camera stream?")) return;
+
+    try {
+      const response = await fetch(`/api/kerberos-cameras/${cameraId}`, {
+        method: "DELETE",
+      });
+
+      if (response.ok) {
+        setCameras((prev) => prev.filter((cam) => cam.id !== cameraId));
+        alert("Camera stream deleted successfully.");
+      } else {
+        const resData = await response.json().catch(() => ({}));
+        alert(`Failed to delete camera: ${resData.error || "Unknown error"}`);
+      }
+    } catch (error) {
+      console.error("Error deleting camera stream:", error);
+      alert("Operational failure while trying to delete camera.");
+    }
   };
 
   const resetForm = () => {
@@ -104,8 +128,8 @@ export default function CameraManagement() {
     const selectedSiteObj = sites.find((s) => String(s.id) === String(selectedSiteId));
 
     const cameraPayload = {
-      camera_name: cameraName,
-      rtsp_url: streamUrl,
+      camera_name: cameraName.trim(),
+      rtsp_url: streamUrl.trim(),
       site_id: selectedSiteId,
       site_name: selectedSiteObj ? selectedSiteObj.name : "Primary Site",
     };
@@ -212,7 +236,7 @@ export default function CameraManagement() {
                 </label>
                 <Input
                   type="text"
-                  placeholder="e.g., camera21"
+                  placeholder="e.g., Camera21"
                   value={cameraName}
                   onChange={(e) => setCameraName(e.target.value)}
                   required
@@ -340,12 +364,15 @@ export default function CameraManagement() {
                 <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider">
                   Status
                 </th>
+                <th className="px-6 py-3 text-right text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider">
+                  Actions
+                </th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200 dark:divide-zinc-800">
               {filteredCameras.length === 0 ? (
                 <tr>
-                  <td colSpan={4} className="px-6 py-10 text-center text-gray-400 dark:text-gray-500 text-sm">
+                  <td colSpan={5} className="px-6 py-10 text-center text-gray-400 dark:text-gray-500 text-sm">
                     No active camera streams found.
                   </td>
                 </tr>
@@ -386,6 +413,28 @@ export default function CameraManagement() {
                           ></span>
                           {camera.status === "active" ? "Online" : "Offline"}
                         </span>
+                      </td>
+
+                      <td className="px-6 py-4 text-sm text-right space-x-1 whitespace-nowrap">
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/50"
+                          onClick={() => openEditModal(camera)}
+                        >
+                          <Edit2 size={15} />
+                        </Button>
+
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 text-red-600 hover:bg-red-50 dark:hover:bg-red-950/50"
+                          onClick={() => handleDeleteCamera(camera.id)}
+                        >
+                          <Trash2 size={15} />
+                        </Button>
                       </td>
                     </tr>
                   );

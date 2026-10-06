@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Play, Loader2, Video, Search, X, Download } from "lucide-react";
+import { Play, Loader2, Video, Search, X, Download, ChevronDown } from "lucide-react";
 
 interface Site {
   id: string;
@@ -79,10 +79,8 @@ export default function NVRRecordings() {
   const filteredCameras = useMemo(() => {
     let result = cameras;
 
-    // Filter by site if a specific site is selected
     if (selectedSiteId) {
       result = result.filter((cam) => {
-        // Match either site_id or siteName/site_name text
         const selectedSiteObj = sites.find((s) => s.id === selectedSiteId);
         const selectedSiteName = selectedSiteObj ? selectedSiteObj.name.toLowerCase() : "";
         
@@ -96,7 +94,6 @@ export default function NVRRecordings() {
       });
     }
 
-    // Filter by typed camera name/id text
     if (cameraSearch.trim()) {
       const searchTerm = cameraSearch.toLowerCase();
       result = result.filter((cam) => {
@@ -122,7 +119,8 @@ export default function NVRRecordings() {
     setIsCameraDropdownOpen(false);
   };
 
-  const handleClearCameraSearch = () => {
+  const handleClearCameraSearch = (e: React.MouseEvent) => {
+    e.stopPropagation();
     setCameraSearch("");
     setSelectedCameraId("");
     setIsCameraDropdownOpen(false);
@@ -142,7 +140,7 @@ export default function NVRRecordings() {
 
   const fetchAgentRecordings = async () => {
     if (!selectedCameraId || !currentCamera) {
-      alert("Please select a camera from the typed suggestions.");
+      alert("Please select a valid camera from the options.");
       return;
     }
     if (!startDateTime || !endDateTime) {
@@ -212,11 +210,8 @@ export default function NVRRecordings() {
 
   const visibleRecordings = recordings.slice(0, displayCount);
 
-  // Show dropdown ONLY if user typed something and menu isn't explicitly closed
-  const showSuggestions = isCameraDropdownOpen && cameraSearch.trim().length > 0;
-
   return (
-    <div className="space-y-6 text-gray-900 dark:text-gray-100 min-h-screen transition-colors duration-200">
+    <div className="w-full space-y-6 text-gray-900 dark:text-gray-100 min-h-screen transition-colors duration-200">
       <div>
         <h1 className="text-2xl font-bold">NVR Recordings</h1>
         <p className="text-gray-600 dark:text-gray-400 text-sm">
@@ -224,12 +219,12 @@ export default function NVRRecordings() {
         </p>
       </div>
 
-      {/* Controls */}
-      <div className="bg-gray-50 dark:bg-zinc-900 border border-gray-200 dark:border-zinc-800 rounded-xl p-4 space-y-3">
-        <div className="flex gap-4 flex-wrap items-end">
+      {/* Controls Container: Full Width Responsive Grid */}
+      <div className="w-full bg-gray-50 dark:bg-zinc-900 border border-gray-200 dark:border-zinc-800 rounded-xl p-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 items-end w-full">
 
           {/* Site Select */}
-          <div className="flex flex-col gap-1 min-w-[200px]">
+          <div className="flex flex-col gap-1 w-full">
             <label className="text-xs font-semibold text-gray-500 dark:text-gray-400">
               Select Site
             </label>
@@ -241,7 +236,7 @@ export default function NVRRecordings() {
               <select
                 value={selectedSiteId}
                 onChange={(e) => handleSiteChange(e.target.value)}
-                className="px-3 h-9 border border-gray-200 dark:border-zinc-800 rounded-lg bg-white dark:bg-zinc-950 text-sm font-medium outline-none focus:border-blue-500 dark:focus:border-blue-400 shadow-sm text-gray-700 dark:text-gray-200"
+                className="w-full px-3 h-9 border border-gray-200 dark:border-zinc-800 rounded-lg bg-white dark:bg-zinc-950 text-sm font-medium outline-none focus:border-blue-500 dark:focus:border-blue-400 shadow-sm text-gray-700 dark:text-gray-200"
               >
                 <option value="">All Sites</option>
                 {sites.map((site) => (
@@ -253,8 +248,8 @@ export default function NVRRecordings() {
             )}
           </div>
 
-          {/* Camera Search Input with On-Demand Suggestions */}
-          <div className="flex flex-col gap-1 min-w-[240px] relative">
+          {/* Searchable + Clickable Dropdown Camera Field */}
+          <div className="flex flex-col gap-1 w-full relative">
             <label className="text-xs font-semibold text-gray-500 dark:text-gray-400">
               Select Camera
             </label>
@@ -263,11 +258,12 @@ export default function NVRRecordings() {
                 <Loader2 className="h-3 w-3 animate-spin mr-2" /> Loading feeds...
               </div>
             ) : (
-              <div className="relative">
+              <div className="relative w-full">
                 <Input
                   type="text"
-                  placeholder="Type camera name (e.g., camera1)..."
+                  placeholder="Select or type camera..."
                   value={cameraSearch}
+                  onClick={() => setIsCameraDropdownOpen(true)}
                   onFocus={() => setIsCameraDropdownOpen(true)}
                   onChange={(e) => {
                     const val = e.target.value;
@@ -275,21 +271,30 @@ export default function NVRRecordings() {
                     setSelectedCameraId("");
                     setIsCameraDropdownOpen(true);
                   }}
-                  className="h-9 pr-8 bg-white dark:bg-zinc-950 border-gray-200 dark:border-zinc-800 text-sm"
+                  className="w-full h-9 pr-8 bg-white dark:bg-zinc-950 border-gray-200 dark:border-zinc-800 text-sm cursor-pointer"
                 />
 
-                {cameraSearch && (
-                  <button
-                    type="button"
-                    onClick={handleClearCameraSearch}
-                    className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
-                  >
-                    <X size={14} />
-                  </button>
-                )}
+                <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1 text-gray-400">
+                  {cameraSearch && (
+                    <button
+                      type="button"
+                      onClick={handleClearCameraSearch}
+                      className="hover:text-gray-600 dark:hover:text-gray-200"
+                    >
+                      <X size={14} />
+                    </button>
+                  )}
+                  <ChevronDown
+                    size={16}
+                    className={`cursor-pointer transition-transform ${
+                      isCameraDropdownOpen ? "rotate-180" : ""
+                    }`}
+                    onClick={() => setIsCameraDropdownOpen(!isCameraDropdownOpen)}
+                  />
+                </div>
 
-                {/* Suggestions Popover (Only triggers when typing) */}
-                {showSuggestions && (
+                {/* Dropdown Options List */}
+                {isCameraDropdownOpen && (
                   <>
                     <div
                       className="fixed inset-0 z-10"
@@ -315,7 +320,7 @@ export default function NVRRecordings() {
                             <span>{camera.name}</span>
                             {camera.site_name && (
                               <span className="text-[10px] text-gray-400 dark:text-gray-500 bg-gray-100 dark:bg-zinc-900 px-1.5 py-0.5 rounded">
-                                {camera.site_name}
+                                {}
                               </span>
                             )}
                           </div>
@@ -328,30 +333,32 @@ export default function NVRRecordings() {
             )}
           </div>
 
-          <div className="flex flex-col gap-1">
+          <div className="flex flex-col gap-1 w-full">
             <label className="text-xs font-semibold text-gray-500 dark:text-gray-400">From</label>
             <Input
               type="datetime-local"
               value={startDateTime}
               max={maxDateTime}
               onChange={(e) => setStartDateTime(e.target.value)}
+              className="w-full h-9 bg-white dark:bg-zinc-950 border-gray-200 dark:border-zinc-800 text-sm"
             />
           </div>
 
-          <div className="flex flex-col gap-1">
+          <div className="flex flex-col gap-1 w-full">
             <label className="text-xs font-semibold text-gray-500 dark:text-gray-400">To</label>
             <Input
               type="datetime-local"
               value={endDateTime}
               max={maxDateTime}
               onChange={(e) => setEndDateTime(e.target.value)}
+              className="w-full h-9 bg-white dark:bg-zinc-950 border-gray-200 dark:border-zinc-800 text-sm"
             />
           </div>
 
           <Button
             onClick={fetchAgentRecordings}
             disabled={loadingRecordings}
-            className="h-9 bg-blue-600 hover:bg-blue-700 text-white font-medium text-sm px-4 flex items-center gap-2 rounded-lg"
+            className="w-full h-9 bg-blue-600 hover:bg-blue-700 text-white font-medium text-sm px-4 flex items-center justify-center gap-2 rounded-lg"
           >
             {loadingRecordings ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search size={16} />}
             View Recording
@@ -362,16 +369,16 @@ export default function NVRRecordings() {
 
       {/* Video Grid Section */}
       {loadingRecordings ? (
-        <div className="flex flex-col items-center justify-center py-20 bg-gray-50 dark:bg-zinc-900 rounded-xl border border-dashed border-gray-200 dark:border-zinc-800">
+        <div className="w-full flex flex-col items-center justify-center py-20 bg-gray-50 dark:bg-zinc-900 rounded-xl border border-dashed border-gray-200 dark:border-zinc-800">
           <Loader2 className="h-8 w-8 animate-spin text-blue-600 dark:text-blue-400 mb-2" />
           <p className="text-sm text-gray-500 dark:text-gray-400">Fetching MediaMTX recording files...</p>
         </div>
       ) : recordings.length === 0 ? (
-        <div className="text-center py-12 bg-gray-50 dark:bg-zinc-900 rounded-xl border border-gray-200 dark:border-zinc-800 text-gray-400 dark:text-gray-500 text-sm">
+        <div className="w-full text-center py-12 bg-gray-50 dark:bg-zinc-900 rounded-xl border border-gray-200 dark:border-zinc-800 text-gray-400 dark:text-gray-500 text-sm">
           No recording files found for this date range. Select a range and click "View Recording".
         </div>
       ) : (
-        <div className="space-y-6">
+        <div className="w-full space-y-6">
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {visibleRecordings.map((recording) => (
               <Card

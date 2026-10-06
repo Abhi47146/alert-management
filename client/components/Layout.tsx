@@ -146,9 +146,18 @@ export default function Layout() {
             </div>
           </div>
 
-          {/* Right Action Elements Profile / Theme Toggle */}
+          {/* Right Action Elements: Logo / Theme Toggle / Profile */}
           <div className="flex items-center gap-4">
             
+            {/* Logo Image */}
+            <div className="flex items-center pr-2 border-r border-border">
+              <img
+                src="/logo.jpg"
+                alt="Logo"
+                className="h-9 w-auto object-contain rounded-md"
+              />
+            </div>
+
             {/* Theme Toggle Button */}
             <Button
               variant="ghost"
