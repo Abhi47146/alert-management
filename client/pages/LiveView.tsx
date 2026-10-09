@@ -25,12 +25,11 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 
-// Extend BaseLocalCamera to support backend status without modifying config.ts
 interface LocalCamera extends BaseLocalCamera {
   status?: string;
 }
 
-type GridViewMode = "single" | "2x2" | "3x3" | "4x4";
+type GridViewMode = "single" | "2x2" | "3x3" | "16";
 
 export default function LiveView() {
   const [gridMode, setGridMode] = useState<GridViewMode>("2x2");
@@ -41,8 +40,9 @@ export default function LiveView() {
   const [selectedCameraId, setSelectedCameraId] = useState<string>("");
   const [failedStreams, setFailedStreams] = useState<Record<string, boolean>>({});
 
-  // Search & Suggestion states for Camera Selection
+  // Search & Filter states for Camera Selection
   const [cameraSearch, setCameraSearch] = useState<string>("");
+  const [statusFilter, setStatusFilter] = useState<string>("All Status");
   const [isCameraDropdownOpen, setIsCameraDropdownOpen] = useState<boolean>(false);
 
   // Enlarge modal state
@@ -56,15 +56,11 @@ export default function LiveView() {
   const fetchCamerasFromAPI = async () => {
     setIsLoading(true);
     try {
-      const response = await fetch('/api/kerberos-cameras');
+      const response = await fetch("/api/kerberos-cameras");
       if (response.ok) {
         const data: LocalCamera[] = await response.json();
         setCameraList(data);
-
-        if (data.length > 0 && !selectedCameraId) {
-          setSelectedCameraId(data[0].id);
-          setCameraSearch(`${data[0].name} (${data[0].siteName || "Primary Site"})`);
-        }
+        // Primary focus stream remains empty on initial load
       } else {
         console.error("Failed to load live cameras from backend");
       }
@@ -79,23 +75,28 @@ export default function LiveView() {
     fetchCamerasFromAPI();
   }, []);
 
-  // Filter cameras dynamically based on input query
+  // Filter cameras dynamically based on search query AND status filter (Online / Offline)
   const filteredCameras = useMemo(() => {
-    if (!cameraSearch.trim()) return cameraList;
-    const searchTerm = cameraSearch.toLowerCase();
-    return cameraList.filter(
-      (cam) =>
-        cam.name.toLowerCase().includes(searchTerm) ||
-        (cam.siteName && cam.siteName.toLowerCase().includes(searchTerm))
-    );
-  }, [cameraList, cameraSearch]);
+    return cameraList.filter((cam) => {
+      const isOnline = cam.status === "active" && !failedStreams[cam.id];
+
+      // Status filter check
+      if (statusFilter === "Online" && !isOnline) return false;
+      if (statusFilter === "Offline" && isOnline) return false;
+
+      // Search query filter check (strictly on camera name)
+      if (!cameraSearch.trim()) return true;
+      const searchTerm = cameraSearch.toLowerCase();
+      return cam.name.toLowerCase().includes(searchTerm);
+    });
+  }, [cameraList, cameraSearch, statusFilter, failedStreams]);
 
   const autoScrollFrame = useRef<number | null>(null);
   const autoScrollSpeed = useRef<number>(0);
   const scrollParentRef = useRef<HTMLElement | Window | null>(null);
 
-  const AUTOSCROLL_EDGE_SIZE = 150; 
-  const AUTOSCROLL_MAX_SPEED = 28; 
+  const AUTOSCROLL_EDGE_SIZE = 150;
+  const AUTOSCROLL_MAX_SPEED = 28;
 
   const getScrollParent = (el: HTMLElement | null): HTMLElement | Window => {
     let node = el?.parentElement || null;
@@ -145,7 +146,10 @@ export default function LiveView() {
         ? { top: 0, bottom: window.innerHeight }
         : (target as HTMLElement).getBoundingClientRect();
 
-    const clampedY = Math.min(Math.max(clientY, rect.top - AUTOSCROLL_EDGE_SIZE), rect.bottom + AUTOSCROLL_EDGE_SIZE);
+    const clampedY = Math.min(
+      Math.max(clientY, rect.top - AUTOSCROLL_EDGE_SIZE),
+      rect.bottom + AUTOSCROLL_EDGE_SIZE
+    );
 
     let speed = 0;
     if (clampedY < rect.top + AUTOSCROLL_EDGE_SIZE) {
@@ -184,7 +188,7 @@ export default function LiveView() {
 
   const handleSelectCamera = (camera: LocalCamera) => {
     setSelectedCameraId(camera.id);
-    setCameraSearch(`${camera.name} (${camera.siteName || "Primary Site"})`);
+    setCameraSearch(camera.name); // Shows strictly camera name without site name
     setIsCameraDropdownOpen(false);
     if (gridMode !== "single") setGridMode("single");
   };
@@ -194,10 +198,6 @@ export default function LiveView() {
     setCameraSearch("");
     setSelectedCameraId("");
     setIsCameraDropdownOpen(false);
-  };
-
-  const handleRetryStream = (camId: string) => {
-    setFailedStreams((prev) => ({ ...prev, [camId]: false }));
   };
 
   const handleStreamError = (camId: string) => {
@@ -251,9 +251,9 @@ export default function LiveView() {
   const getVisibleCameras = (): LocalCamera[] => {
     if (gridMode === "single") {
       const active = cameraList.find((c) => c.id === selectedCameraId);
-      return active ? [active] : cameraList.length > 0 ? [cameraList[0]] : [];
+      return active ? [active] : [];
     }
-    return cameraList;
+    return filteredCameras;
   };
 
   const visibleCameras = getVisibleCameras();
@@ -266,8 +266,8 @@ export default function LiveView() {
         return "grid-cols-1 md:grid-cols-2";
       case "3x3":
         return "grid-cols-1 sm:grid-cols-2 lg:grid-cols-3";
-      case "4x4":
-        return "grid-cols-1 sm:grid-cols-2 lg:grid-cols-4";
+      case "16":
+        return "grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4";
       default:
         return "grid-cols-1 md:grid-cols-2";
     }
@@ -275,8 +275,7 @@ export default function LiveView() {
 
   return (
     <div className="space-y-6 text-gray-900 dark:text-gray-100 min-h-screen transition-colors duration-200">
-
-      {/* Header Section */}
+      {/* Top Header Section with Right-Aligned Status & Grid Controls */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold flex items-center gap-2">
@@ -287,134 +286,153 @@ export default function LiveView() {
           </p>
         </div>
 
-        {/* Grid Mode Controls */}
-        <div className="flex items-center gap-2 bg-gray-50 dark:bg-zinc-900 p-1.5 border border-gray-200 dark:border-zinc-800 rounded-xl self-start sm:self-auto flex-wrap">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={fetchCamerasFromAPI}
-            className="h-8 px-2 text-xs text-gray-400 hover:text-white"
-            title="Refresh Camera Streams"
-          >
-            <RefreshCw className={`h-3.5 w-3.5 ${isLoading ? "animate-spin" : ""}`} />
-          </Button>
+        {/* Right-Aligned Control Options */}
+        <div className="flex items-center gap-3 flex-wrap self-start sm:self-auto">
+          {/* Status Filter Dropdown */}
+          <div className="flex flex-col gap-1">
+            <label className="text-xs font-semibold text-gray-500 dark:text-gray-400">
+              Filter Status
+            </label>
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              className="h-9 px-3 border border-gray-200 dark:border-zinc-800 rounded-lg bg-white dark:bg-zinc-950 text-sm font-medium outline-none focus:border-blue-500 dark:focus:border-blue-400 shadow-sm text-gray-700 dark:text-gray-200 cursor-pointer"
+            >
+              <option value="All Status">All Status</option>
+              <option value="Online">Online</option>
+              <option value="Offline">Offline</option>
+            </select>
+          </div>
 
-          <Button
-            variant={gridMode === "single" ? "default" : "ghost"}
-            size="sm"
-            onClick={() => setGridMode("single")}
-            className="h-8 px-3 text-xs flex items-center gap-1.5"
-          >
-            Single
-          </Button>
+          {/* Grid Layout Selection */}
+          <div className="flex flex-col gap-1">
+            <label className="text-xs font-semibold text-gray-500 dark:text-gray-400">
+              View Layout
+            </label>
+            <div className="flex items-center gap-1 bg-white dark:bg-zinc-950 p-1 border border-gray-200 dark:border-zinc-800 rounded-lg h-9">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={fetchCamerasFromAPI}
+                className="h-7 px-2 text-xs text-gray-400 hover:text-white"
+                title="Refresh Camera Streams"
+              >
+                <RefreshCw className={`h-3.5 w-3.5 ${isLoading ? "animate-spin" : ""}`} />
+              </Button>
 
-          <Button
-            variant={gridMode === "2x2" ? "default" : "ghost"}
-            size="sm"
-            onClick={() => setGridMode("2x2")}
-            className="h-8 px-3 text-xs flex items-center gap-1.5"
-          >
-            <Grid2X2 className="h-3.5 w-3.5" /> 2x2
-          </Button>
+              <Button
+                variant={gridMode === "single" ? "default" : "ghost"}
+                size="sm"
+                onClick={() => setGridMode("single")}
+                className="h-7 px-2.5 text-xs"
+              >
+                Single
+              </Button>
 
-          <Button
-            variant={gridMode === "3x3" ? "default" : "ghost"}
-            size="sm"
-            onClick={() => setGridMode("3x3")}
-            className="h-8 px-3 text-xs flex items-center gap-1.5"
-          >
-            <Grid3X3 className="h-3.5 w-3.5" /> 3x3
-          </Button>
+              <Button
+                variant={gridMode === "2x2" ? "default" : "ghost"}
+                size="sm"
+                onClick={() => setGridMode("2x2")}
+                className="h-7 px-2.5 text-xs flex items-center gap-1"
+              >
+                <Grid2X2 className="h-3.5 w-3.5" /> 2x2
+              </Button>
 
-          <Button
-            variant={gridMode === "4x4" ? "default" : "ghost"}
-            size="sm"
-            onClick={() => setGridMode("4x4")}
-            className="h-8 px-3 text-xs flex items-center gap-1.5"
-          >
-            <LayoutGrid className="h-3.5 w-3.5" /> 4x4
-          </Button>
+              <Button
+                variant={gridMode === "3x3" ? "default" : "ghost"}
+                size="sm"
+                onClick={() => setGridMode("3x3")}
+                className="h-7 px-2.5 text-xs flex items-center gap-1"
+              >
+                <Grid3X3 className="h-3.5 w-3.5" /> 3x3
+              </Button>
+
+              <Button
+                variant={gridMode === "16" ? "default" : "ghost"}
+                size="sm"
+                onClick={() => setGridMode("16")}
+                className="h-7 px-2.5 text-xs flex items-center gap-1"
+              >
+                <LayoutGrid className="h-3.5 w-3.5" /> 4x4
+              </Button>
+            </div>
+          </div>
         </div>
       </div>
 
-      {/* Primary Camera Searchable Selector (Dropdown + Typing) */}
-      <div className="bg-gray-50 dark:bg-zinc-900 border border-gray-200 dark:border-zinc-800 rounded-xl p-4 space-y-3">
-        <div className="flex gap-4 flex-wrap items-end">
-          <div className="flex flex-col gap-1 min-w-[280px] relative">
-            <label className="text-xs font-semibold text-gray-500 dark:text-gray-400">
-              Primary Focus Stream
-            </label>
-            
-            <div className="relative">
-              <Input
-                type="text"
-                placeholder="Select or type camera..."
-                value={cameraSearch}
-                onClick={() => setIsCameraDropdownOpen(true)}
-                onFocus={() => setIsCameraDropdownOpen(true)}
-                onChange={(e) => {
-                  const val = e.target.value;
-                  setCameraSearch(val);
-                  setSelectedCameraId("");
-                  setIsCameraDropdownOpen(true);
-                }}
-                className="h-9 pr-14 bg-white dark:bg-zinc-950 border-gray-200 dark:border-zinc-800 text-sm cursor-pointer"
-              />
+      {/* Primary Focus Stream Control (Dedicated Left-Aligned Small Input Container) */}
+      <div className="bg-gray-50 dark:bg-zinc-900 border border-gray-200 dark:border-zinc-800 rounded-xl p-4">
+        <div className="flex flex-col gap-1.5 w-64 relative">
+          <label className="text-xs font-semibold text-gray-500 dark:text-gray-400">
+            Primary Focus Stream
+          </label>
 
-              <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1 text-gray-400">
-                {cameraSearch && (
-                  <button
-                    type="button"
-                    onClick={handleClearCameraSearch}
-                    className="hover:text-gray-600 dark:hover:text-gray-200"
-                  >
-                    <X size={14} />
-                  </button>
-                )}
-                <ChevronDown
-                  size={16}
-                  className={`cursor-pointer transition-transform ${
-                    isCameraDropdownOpen ? "rotate-180" : ""
-                  }`}
-                  onClick={() => setIsCameraDropdownOpen(!isCameraDropdownOpen)}
-                />
-              </div>
+          <div className="relative w-full">
+            <Input
+              type="text"
+              placeholder="Select or type camera..."
+              value={cameraSearch}
+              onClick={() => setIsCameraDropdownOpen(true)}
+              onFocus={() => setIsCameraDropdownOpen(true)}
+              onChange={(e) => {
+                const val = e.target.value;
+                setCameraSearch(val);
+                setSelectedCameraId("");
+                setIsCameraDropdownOpen(true);
+              }}
+              className="h-9 pr-8 bg-white dark:bg-zinc-950 border-gray-200 dark:border-zinc-800 text-sm cursor-pointer"
+            />
 
-              {/* Typed / Clickable Auto-Suggestions Menu */}
-              {isCameraDropdownOpen && (
-                <>
-                  <div
-                    className="fixed inset-0 z-10"
-                    onClick={() => setIsCameraDropdownOpen(false)}
-                  />
-
-                  <div className="absolute top-full left-0 right-0 mt-1 max-h-56 overflow-y-auto bg-white dark:bg-zinc-950 border border-gray-200 dark:border-zinc-800 rounded-lg shadow-lg z-20 divide-y divide-gray-100 dark:divide-zinc-800">
-                    {filteredCameras.length === 0 ? (
-                      <div className="p-3 text-xs text-gray-500 dark:text-gray-400 text-center">
-                        No matching camera streams found
-                      </div>
-                    ) : (
-                      filteredCameras.map((camera) => (
-                        <div
-                          key={camera.id}
-                          onClick={() => handleSelectCamera(camera)}
-                          className={`px-3 py-2 text-sm cursor-pointer hover:bg-blue-50 dark:hover:bg-zinc-800 transition-colors flex justify-between items-center ${
-                            selectedCameraId === camera.id
-                              ? "bg-blue-50 dark:bg-zinc-800 font-semibold text-blue-600 dark:text-blue-400"
-                              : "text-gray-700 dark:text-gray-200"
-                          }`}
-                        >
-                          <span>{camera.name}</span>
-                          <span className="text-[10px] text-gray-400 dark:text-gray-500 bg-gray-100 dark:bg-zinc-900 px-1.5 py-0.5 rounded font-mono">
-                            {camera.siteName || "Primary Site"}
-                          </span>
-                        </div>
-                      ))
-                    )}
-                  </div>
-                </>
+            <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1 text-gray-400">
+              {cameraSearch && (
+                <button
+                  type="button"
+                  onClick={handleClearCameraSearch}
+                  className="hover:text-gray-600 dark:hover:text-gray-200"
+                >
+                  <X size={14} />
+                </button>
               )}
+              <ChevronDown
+                size={16}
+                className={`cursor-pointer transition-transform ${
+                  isCameraDropdownOpen ? "rotate-180" : ""
+                }`}
+                onClick={() => setIsCameraDropdownOpen(!isCameraDropdownOpen)}
+              />
             </div>
+
+            {/* Dropdown List - Displaying Only Camera Name */}
+            {isCameraDropdownOpen && (
+              <>
+                <div
+                  className="fixed inset-0 z-10"
+                  onClick={() => setIsCameraDropdownOpen(false)}
+                />
+
+                <div className="absolute top-full right-0 left-0 mt-1 max-h-56 overflow-y-auto bg-white dark:bg-zinc-950 border border-gray-200 dark:border-zinc-800 rounded-lg shadow-lg z-20 divide-y divide-gray-100 dark:divide-zinc-800">
+                  {filteredCameras.length === 0 ? (
+                    <div className="p-3 text-xs text-gray-500 dark:text-gray-400 text-center">
+                      No matching camera streams
+                    </div>
+                  ) : (
+                    filteredCameras.map((camera) => (
+                      <div
+                        key={camera.id}
+                        onClick={() => handleSelectCamera(camera)}
+                        className={`px-3 py-2 text-sm cursor-pointer hover:bg-blue-50 dark:hover:bg-zinc-800 transition-colors ${
+                          selectedCameraId === camera.id
+                            ? "bg-blue-50 dark:bg-zinc-800 font-semibold text-blue-600 dark:text-blue-400"
+                            : "text-gray-700 dark:text-gray-200"
+                        }`}
+                      >
+                        {camera.name}
+                      </div>
+                    ))
+                  )}
+                </div>
+              </>
+            )}
           </div>
         </div>
       </div>
@@ -426,12 +444,13 @@ export default function LiveView() {
         </div>
       ) : visibleCameras.length === 0 ? (
         <div className="p-12 text-center text-zinc-500 font-mono text-sm bg-zinc-900/50 rounded-xl border border-zinc-800">
-          No live cameras found. Add cameras in Camera Management to view streams.
+          {gridMode === "single" && !selectedCameraId
+            ? "Select a camera stream above to display in single view."
+            : "No matching camera streams found."}
         </div>
       ) : (
         <div ref={gridRef} className={`grid gap-4 ${getGridClasses(gridMode)}`}>
           {visibleCameras.map((camera, index) => {
-            // Evaluates camera status exactly like Camera Management ("active" = Online)
             const isOffline = camera.status !== "active" || failedStreams[camera.id];
             const isBeingDragged = draggedIndex === index;
             const isTarget = dropTargetIndex === index && draggedIndex !== index;
@@ -451,8 +470,8 @@ export default function LiveView() {
                   isBeingDragged
                     ? "opacity-30 scale-95 border-dashed border-blue-500"
                     : isTarget
-                      ? "border-2 border-blue-500 scale-[1.02] shadow-blue-500/20 shadow-lg"
-                      : "border-zinc-800 hover:border-zinc-700"
+                    ? "border-2 border-blue-500 scale-[1.02] shadow-blue-500/20 shadow-lg"
+                    : "border-zinc-800 hover:border-zinc-700"
                 }`}
               >
                 {/* Overlay Header Bar */}
@@ -502,20 +521,7 @@ export default function LiveView() {
                   {isOffline ? (
                     <div className="flex flex-col items-center justify-center p-6 text-center text-zinc-500 space-y-2 pointer-events-auto bg-zinc-950/90 w-full h-full">
                       <VideoOff className="h-10 w-10 text-red-500/80 mb-1" />
-                      <p className="text-sm font-semibold text-red-400">
-                        Camera Offline / Stream Not Found
-                      </p>
-                      {/* <p className="text-[11px] text-zinc-400 font-mono truncate max-w-[260px]">
-                        {camera.streamUrl || "Path not configured in MediaMTX"}
-                      </p> */}
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => handleRetryStream(camera.id)}
-                        className="h-7 text-[11px] mt-2 border-zinc-700 bg-zinc-900 hover:bg-zinc-800 text-zinc-200"
-                      >
-                        <RefreshCw size={12} className="mr-1.5" /> Retry Connection
-                      </Button>
+                      <p className="text-sm font-semibold text-red-400">Camera Offline</p>
                     </div>
                   ) : (
                     <iframe
@@ -550,14 +556,16 @@ export default function LiveView() {
               <span className="relative flex h-2.5 w-2.5">
                 <span
                   className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${
-                    enlargedCamera && (enlargedCamera.status !== "active" || failedStreams[enlargedCamera.id])
+                    enlargedCamera &&
+                    (enlargedCamera.status !== "active" || failedStreams[enlargedCamera.id])
                       ? "bg-red-500"
                       : "bg-green-400"
                   }`}
                 ></span>
                 <span
                   className={`relative inline-flex rounded-full h-2.5 w-2.5 ${
-                    enlargedCamera && (enlargedCamera.status !== "active" || failedStreams[enlargedCamera.id])
+                    enlargedCamera &&
+                    (enlargedCamera.status !== "active" || failedStreams[enlargedCamera.id])
                       ? "bg-red-500"
                       : "bg-green-500"
                   }`}
@@ -568,34 +576,35 @@ export default function LiveView() {
           </DialogHeader>
 
           <div className="relative aspect-video w-full bg-black flex items-center justify-center">
-            {enlargedCamera && (
-              enlargedCamera.status !== "active" || failedStreams[enlargedCamera.id] ? (
-                <div className="flex flex-col items-center justify-center p-6 text-center text-zinc-500 space-y-2">
-                  <VideoOff className="h-12 w-12 text-red-500 mb-2" />
-                  <p className="text-base font-semibold text-red-400">
-                    Camera Stream Currently Unavailable
-                  </p>
-                </div>
-              ) : (
-                <iframe
-                  src={enlargedCamera.streamUrl}
-                  title={`Enlarged Feed - ${enlargedCamera.name}`}
-                  className="w-full h-full border-0"
-                  allow="autoplay; camera; microphone; fullscreen"
-                />
-              )
+            {enlargedCamera &&
+            (enlargedCamera.status !== "active" || failedStreams[enlargedCamera.id]) ? (
+              <div className="flex flex-col items-center justify-center p-6 text-center text-zinc-500 space-y-2">
+                <VideoOff className="h-12 w-12 text-red-500 mb-2" />
+                <p className="text-base font-semibold text-red-400">Camera Stream Offline</p>
+              </div>
+            ) : (
+              <iframe
+                src={enlargedCamera?.streamUrl}
+                title={`Enlarged Feed - ${enlargedCamera?.name}`}
+                className="w-full h-full border-0"
+                allow="autoplay; camera; microphone; fullscreen"
+              />
             )}
           </div>
 
           <div className="p-4 bg-zinc-900 border-t border-zinc-800 flex items-center justify-between text-xs text-zinc-400 font-mono">
             <div className="flex items-center gap-2">
               <Video size={14} className="text-blue-400" />
-              <span>Site Location: <strong className="text-zinc-200">{enlargedCamera?.siteName || "Primary Site"}</strong></span>
+              <span>
+                Site Location:{" "}
+                <strong className="text-zinc-200">
+                  {enlargedCamera?.siteName || "Primary Site"}
+                </strong>
+              </span>
             </div>
           </div>
         </DialogContent>
       </Dialog>
-
     </div>
   );
 }

@@ -3,7 +3,7 @@
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Plus, Search, Edit2, Trash2 } from "lucide-react";
+import { Plus, Search, Edit2, Trash2, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
 import { useState, useEffect } from "react";
 import {
   Dialog,
@@ -25,9 +25,18 @@ interface Camera {
   stream_url?: string;
   streamUrl?: string;
   rtspUrl?: string;
+  camera_ip?: string;
+  cameraIp?: string;
+  camera_port?: number;
+  cameraPort?: number;
+  latitude?: number | null;
+  longitude?: number | null;
   status: string;
   created_at?: string;
 }
+
+type SortField = "name" | "site_name" | "camera_ip" | "status" | "created_at";
+type SortOrder = "asc" | "desc";
 
 export default function CameraManagement() {
   const [open, setOpen] = useState(false);
@@ -38,16 +47,22 @@ export default function CameraManagement() {
   const [cameraName, setCameraName] = useState("");
   const [streamUrl, setStreamUrl] = useState("");
   const [selectedSiteId, setSelectedSiteId] = useState("");
+  const [cameraIp, setCameraIp] = useState("");
+  const [cameraPort, setCameraPort] = useState("");
+  const [latitude, setLatitude] = useState("");
+  const [longitude, setLongitude] = useState("");
   const [loading, setLoading] = useState(false);
 
   // Data Matrices from backend APIs
   const [sites, setSites] = useState<any[]>([]);
   const [cameras, setCameras] = useState<Camera[]>([]);
 
-  // Table Filter States
+  // Table Filter & Sorting States
   const [searchQuery, setSearchQuery] = useState("");
   const [filterSite, setFilterSite] = useState("All Sites");
   const [filterStatus, setFilterStatus] = useState("All Status");
+  const [sortField, setSortField] = useState<SortField>("created_at");
+  const [sortOrder, setSortOrder] = useState<SortOrder>("desc");
 
   const fetchCameras = async () => {
     try {
@@ -80,10 +95,19 @@ export default function CameraManagement() {
   const openEditModal = (camera: Camera) => {
     setIsEdit(true);
     setEditingCameraId(camera.id);
-    // Preserves original casing when loading for edit
     setCameraName(camera.name || "");
     setSelectedSiteId(camera.site_id || camera.siteId || "");
     setStreamUrl(camera.stream_url || camera.streamUrl || camera.rtspUrl || "");
+    setCameraIp(camera.camera_ip || camera.cameraIp || "");
+    setCameraPort(
+      camera.camera_port !== undefined && camera.camera_port !== null
+        ? String(camera.camera_port)
+        : camera.cameraPort !== undefined && camera.cameraPort !== null
+        ? String(camera.cameraPort)
+        : ""
+    );
+    setLatitude(camera.latitude !== undefined && camera.latitude !== null ? String(camera.latitude) : "");
+    setLongitude(camera.longitude !== undefined && camera.longitude !== null ? String(camera.longitude) : "");
     setOpen(true);
   };
 
@@ -114,6 +138,10 @@ export default function CameraManagement() {
     setCameraName("");
     setSelectedSiteId("");
     setStreamUrl("");
+    setCameraIp("");
+    setCameraPort("");
+    setLatitude("");
+    setLongitude("");
   };
 
   useEffect(() => {
@@ -123,15 +151,33 @@ export default function CameraManagement() {
 
   const handleFormSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    const trimmedName = cameraName.trim();
+
+    // Check for duplicate camera name on create or edit (if changed)
+    const isDuplicate = cameras.some((cam) => {
+      if (isEdit && cam.id === editingCameraId) return false;
+      return cam.name.toLowerCase() === trimmedName.toLowerCase();
+    });
+
+    if (isDuplicate) {
+      alert(`Error: A camera with the name '${trimmedName}' already exists. Please choose a unique name.`);
+      return;
+    }
+
     setLoading(true);
 
     const selectedSiteObj = sites.find((s) => String(s.id) === String(selectedSiteId));
 
     const cameraPayload = {
-      camera_name: cameraName.trim(),
+      camera_name: trimmedName,
       rtsp_url: streamUrl.trim(),
       site_id: selectedSiteId,
       site_name: selectedSiteObj ? selectedSiteObj.name : "Primary Site",
+      camera_ip: cameraIp.trim() || null,
+      camera_port: cameraPort ? parseInt(cameraPort, 10) : null,
+      latitude: latitude ? parseFloat(latitude) : null,
+      longitude: longitude ? parseFloat(longitude) : null,
     };
 
     try {
@@ -162,33 +208,86 @@ export default function CameraManagement() {
     }
   };
 
-  // ROBUST FILTER LOGIC (Supports camelCase & snake_case)
-  const filteredCameras = cameras.filter((camera) => {
-    // 1. Search Query Filter
-    const matchesSearch =
-      searchQuery.trim() === "" ||
-      camera.name.toLowerCase().includes(searchQuery.toLowerCase().trim());
+  const handleSort = (field: SortField) => {
+    if (sortField === field) {
+      setSortOrder((prev) => (prev === "asc" ? "desc" : "asc"));
+    } else {
+      setSortField(field);
+      setSortOrder("asc");
+    }
+  };
 
-    // 2. Resolve Site Identification
-    const camSiteId = String(camera.site_id || camera.siteId || "");
-    const camSiteName = (camera.site_name || camera.siteName || getSiteName(camSiteId)).toLowerCase();
+  // ROBUST FILTER & SORT LOGIC
+  const processedCameras = cameras
+    .filter((camera) => {
+      // 1. Search Query Filter
+      const matchesSearch =
+        searchQuery.trim() === "" ||
+        camera.name.toLowerCase().includes(searchQuery.toLowerCase().trim()) ||
+        (camera.camera_ip || camera.cameraIp || "").toLowerCase().includes(searchQuery.toLowerCase().trim());
 
-    const selectedSiteObj = sites.find((s) => String(s.id) === String(filterSite));
-    const selectedSiteName = selectedSiteObj ? selectedSiteObj.name.toLowerCase() : "";
+      // 2. Resolve Site Identification
+      const camSiteId = String(camera.site_id || camera.siteId || "");
+      const camSiteName = (camera.site_name || camera.siteName || getSiteName(camSiteId)).toLowerCase();
 
-    const matchesSite =
-      filterSite === "All Sites" ||
-      camSiteId === String(filterSite) ||
-      (selectedSiteName !== "" && camSiteName.includes(selectedSiteName));
+      const selectedSiteObj = sites.find((s) => String(s.id) === String(filterSite));
+      const selectedSiteName = selectedSiteObj ? selectedSiteObj.name.toLowerCase() : "";
 
-    // 3. Status Filter
-    const mappedStatus = camera.status === "active" ? "Online" : "Offline";
-    const matchesStatus =
-      filterStatus === "All Status" ||
-      mappedStatus === filterStatus;
+      const matchesSite =
+        filterSite === "All Sites" ||
+        camSiteId === String(filterSite) ||
+        (selectedSiteName !== "" && camSiteName.includes(selectedSiteName));
 
-    return matchesSearch && matchesSite && matchesStatus;
-  });
+      // 3. Status Filter
+      const mappedStatus = camera.status === "active" ? "Online" : "Offline";
+      const matchesStatus =
+        filterStatus === "All Status" || mappedStatus === filterStatus;
+
+      return matchesSearch && matchesSite && matchesStatus;
+    })
+    .sort((a, b) => {
+      let valA = "";
+      let valB = "";
+
+      if (sortField === "name") {
+        valA = a.name;
+        valB = b.name;
+        
+        // Natural alphanumeric sorting (e.g., camera1, camera2, camera10, camera11)
+        const comparison = valA.localeCompare(valB, undefined, {
+          numeric: true,
+          sensitivity: "base",
+        });
+        return sortOrder === "asc" ? comparison : -comparison;
+      }
+
+      if (sortField === "site_name") {
+        valA = (a.site_name || a.siteName || getSiteName(a.site_id || a.siteId)).toLowerCase();
+        valB = (b.site_name || b.siteName || getSiteName(b.site_id || b.siteId)).toLowerCase();
+      } else if (sortField === "camera_ip") {
+        valA = (a.camera_ip || a.cameraIp || "").toLowerCase();
+        valB = (b.camera_ip || b.cameraIp || "").toLowerCase();
+      } else if (sortField === "status") {
+        valA = a.status.toLowerCase();
+        valB = b.status.toLowerCase();
+      } else if (sortField === "created_at") {
+        valA = a.created_at || "";
+        valB = b.created_at || "";
+      }
+
+      if (valA < valB) return sortOrder === "asc" ? -1 : 1;
+      if (valA > valB) return sortOrder === "asc" ? 1 : -1;
+      return 0;
+    });
+
+  const renderSortIcon = (field: SortField) => {
+    if (sortField !== field) return <ArrowUpDown size={14} className="ml-1 text-gray-400 opacity-60" />;
+    return sortOrder === "asc" ? (
+      <ArrowUp size={14} className="ml-1 text-blue-600" />
+    ) : (
+      <ArrowDown size={14} className="ml-1 text-blue-600" />
+    );
+  };
 
   return (
     <div className="space-y-6">
@@ -198,7 +297,7 @@ export default function CameraManagement() {
             Camera Stream & Recording Management
           </h1>
           <p className="text-sm font-medium text-muted-foreground">
-            Configure RTSP sources for live streaming and automatic MP4 file recordings
+            Configure RTSP sources, network parameters, and coordinates for live streaming
           </p>
         </div>
 
@@ -219,54 +318,112 @@ export default function CameraManagement() {
             </Button>
           </DialogTrigger>
 
-          <DialogContent className="sm:max-w-[550px] bg-white dark:bg-zinc-900 border-gray-200 dark:border-zinc-800">
+          <DialogContent className="sm:max-w-[600px] bg-white dark:bg-zinc-900 border-gray-200 dark:border-zinc-800">
             <DialogHeader>
               <DialogTitle className="text-xl font-bold text-gray-900 dark:text-gray-100">
                 {isEdit ? "Update Camera Stream" : "Add New Camera Stream"}
               </DialogTitle>
               <DialogDescription className="text-gray-500 dark:text-gray-400">
-                Enter the camera credentials and source URL.
+                Enter the camera credentials, network IP/Port, and optional geolocation details.
               </DialogDescription>
             </DialogHeader>
 
             <form onSubmit={handleFormSubmit} className="space-y-4 py-2">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  Camera Name (Unique Identifier)
-                </label>
-                <Input
-                  type="text"
-                  placeholder="e.g., Camera21"
-                  value={cameraName}
-                  onChange={(e) => setCameraName(e.target.value)}
-                  required
-                />
-              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Camera Name (Unique) *
+                  </label>
+                  <Input
+                    type="text"
+                    placeholder="e.g., Camera21"
+                    value={cameraName}
+                    onChange={(e) => setCameraName(e.target.value)}
+                    required
+                  />
+                </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  Site Name
-                </label>
-                <select
-                  className="w-full h-10 border border-gray-200 dark:border-zinc-800 rounded-md px-3 bg-white dark:bg-zinc-900 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 dark:text-gray-100"
-                  value={selectedSiteId}
-                  onChange={(e) => setSelectedSiteId(e.target.value)}
-                  required
-                >
-                  <option value="" className="bg-white dark:bg-zinc-900">
-                    Select Site
-                  </option>
-                  {sites.map((site: any) => (
-                    <option key={site.id} value={site.id} className="bg-white dark:bg-zinc-900">
-                      {site.name}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Site Name *
+                  </label>
+                  <select
+                    className="w-full h-10 border border-gray-200 dark:border-zinc-800 rounded-md px-3 bg-white dark:bg-zinc-900 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 dark:text-gray-100"
+                    value={selectedSiteId}
+                    onChange={(e) => setSelectedSiteId(e.target.value)}
+                    required
+                  >
+                    <option value="" className="bg-white dark:bg-zinc-900">
+                      Select Site
                     </option>
-                  ))}
-                </select>
+                    {sites.map((site: any) => (
+                      <option key={site.id} value={site.id} className="bg-white dark:bg-zinc-900">
+                        {site.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              {/* IP & Port Fields */}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Camera IP
+                  </label>
+                  <Input
+                    type="text"
+                    placeholder="192.168.1.50"
+                    value={cameraIp}
+                    onChange={(e) => setCameraIp(e.target.value)}
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Camera Port
+                  </label>
+                  <Input
+                    type="number"
+                    placeholder="554"
+                    value={cameraPort}
+                    onChange={(e) => setCameraPort(e.target.value)}
+                  />
+                </div>
+              </div>
+
+              {/* Geo Coordinates */}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Latitude
+                  </label>
+                  <Input
+                    type="number"
+                    step="any"
+                    placeholder="17.385044"
+                    value={latitude}
+                    onChange={(e) => setLatitude(e.target.value)}
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Longitude
+                  </label>
+                  <Input
+                    type="number"
+                    step="any"
+                    placeholder="78.486671"
+                    value={longitude}
+                    onChange={(e) => setLongitude(e.target.value)}
+                  />
+                </div>
               </div>
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  Source RTSP Stream URL
+                  Source RTSP Stream URL *
                 </label>
                 <Input
                   type="text"
@@ -302,12 +459,12 @@ export default function CameraManagement() {
         </Dialog>
       </div>
 
-      {/* FILTERS */}
+      {/* FILTERS & SORT SELECT */}
       <div className="flex gap-4 items-center">
         <div className="relative flex-1">
           <Search className="absolute left-3 top-2.5 h-4 w-4 text-gray-400 dark:text-gray-500" />
           <Input
-            placeholder="Search by Camera Name..."
+            placeholder="Search by Camera Name or IP..."
             className="pl-9"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
@@ -352,17 +509,41 @@ export default function CameraManagement() {
           <table className="w-full">
             <thead>
               <tr className="border-b border-gray-200 dark:border-zinc-800 bg-gray-50 dark:bg-zinc-900/50">
-                <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider">
-                  Camera Name
+                <th
+                  onClick={() => handleSort("name")}
+                  className="px-6 py-3 text-left text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-zinc-800 transition-colors"
+                >
+                  <div className="flex items-center">
+                    Camera Name
+                    {renderSortIcon("name")}
+                  </div>
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider">
-                  Site Name
+                <th
+                  onClick={() => handleSort("site_name")}
+                  className="px-6 py-3 text-left text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-zinc-800 transition-colors"
+                >
+                  <div className="flex items-center">
+                    Site Name
+                    {renderSortIcon("site_name")}
+                  </div>
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider">
-                  Source RTSP
+                <th
+                  onClick={() => handleSort("camera_ip")}
+                  className="px-6 py-3 text-left text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-zinc-800 transition-colors"
+                >
+                  <div className="flex items-center">
+                    Camera IP
+                    
+                  </div>
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider">
-                  Status
+                <th
+                  onClick={() => handleSort("status")}
+                  className="px-6 py-3 text-left text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-zinc-800 transition-colors"
+                >
+                  <div className="flex items-center">
+                    Status
+                    {renderSortIcon("status")}
+                  </div>
                 </th>
                 <th className="px-6 py-3 text-right text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider">
                   Actions
@@ -370,16 +551,17 @@ export default function CameraManagement() {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200 dark:divide-zinc-800">
-              {filteredCameras.length === 0 ? (
+              {processedCameras.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="px-6 py-10 text-center text-gray-400 dark:text-gray-500 text-sm">
+                  <td colSpan={6} className="px-6 py-10 text-center text-gray-400 dark:text-gray-500 text-sm">
                     No active camera streams found.
                   </td>
                 </tr>
               ) : (
-                filteredCameras.map((camera) => {
+                processedCameras.map((camera) => {
                   const resolvedSiteName = camera.site_name || camera.siteName || getSiteName(camera.site_id || camera.siteId);
-                  const resolvedRtsp = camera.rtspUrl || camera.stream_url || camera.streamUrl || "N/A";
+                  const ip = camera.camera_ip || camera.cameraIp;
+                  const ipPortDisplay = ip != null ? ip : "N/A";
 
                   return (
                     <tr key={camera.id} className="hover:bg-gray-50 dark:hover:bg-zinc-800/50 transition-colors">
@@ -391,12 +573,10 @@ export default function CameraManagement() {
                         {resolvedSiteName}
                       </td>
 
-                      <td
-                        className="px-6 py-4 text-sm text-gray-600 dark:text-gray-400 max-w-[200px] truncate font-mono"
-                        title={resolvedRtsp}
-                      >
-                        {resolvedRtsp}
+                      <td className="px-6 py-4 text-sm text-gray-600 dark:text-gray-400 font-mono">
+                        {ipPortDisplay}
                       </td>
+
 
                       <td className="px-6 py-4 text-sm">
                         <span

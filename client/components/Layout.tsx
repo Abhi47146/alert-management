@@ -51,7 +51,7 @@ export default function Layout() {
     { icon: MapPin, label: "Site Management", path: "/site-management" },
     { icon: Camera, label: "Camera Management", path: "/camera-management" },
     { icon: HardDrive, label: "NVR & Recordings", path: "/nvr-recordings" },
-    { icon: VideoIcon, label: "LIVE Monitoring", path: "/live-view" },
+    { icon: VideoIcon, label: "Live Monitoring", path: "/live-view" },
     { icon: Heart, label: "System Health", path: "/system-health" },
     { icon: Settings, label: "Settings", path: "/settings" },
   ];
@@ -195,3 +195,4 @@ export default function Layout() {
     </div>
   );
 }
+

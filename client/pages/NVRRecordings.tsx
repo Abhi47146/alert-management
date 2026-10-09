@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Play, Loader2, Video, Search, X, Download, ChevronDown } from "lucide-react";
+import { Play, Loader2, Video, Search, X, Download, ChevronDown, Calendar } from "lucide-react";
 
 interface Site {
   id: string;
@@ -30,15 +30,39 @@ interface RecordingEvent {
   formattedTime?: string;
 }
 
+// Convert YYYY-MM-DDTHH:mm to DD/MM/YYYY HH:mm
+const formatToDDMMYYYY = (isoString: string) => {
+  if (!isoString) return "";
+  const [datePart, timePart] = isoString.split("T");
+  if (!datePart) return "";
+  const [year, month, day] = datePart.split("-");
+  return `${day}/${month}/${year}${timePart ? ` ${timePart}` : ""}`;
+};
+
+// Convert ISO date or timestamp to DD/MM/YYYY HH:mm:ss
+const formatTimestampToDDMMYYYY = (timestampSec: number) => {
+  const date = new Date(timestampSec * 1000);
+  const day = String(date.getDate()).padStart(2, "0");
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const year = date.getFullYear();
+  const hours = String(date.getHours()).padStart(2, "0");
+  const minutes = String(date.getMinutes()).padStart(2, "0");
+  const seconds = String(date.getSeconds()).padStart(2, "0");
+  return `${day}/${month}/${year} ${hours}:${minutes}:${seconds}`;
+};
+
 export default function NVRRecordings() {
   const [sites, setSites] = useState<Site[]>([]);
   const [cameras, setCameras] = useState<CameraProfile[]>([]);
+  const startPickerRef = React.useRef<HTMLInputElement>(null);
+  const endPickerRef = React.useRef<HTMLInputElement>(null);
 
   const [selectedSiteId, setSelectedSiteId] = useState<string>("");
   const [selectedCameraId, setSelectedCameraId] = useState<string>("");
   const [cameraSearch, setCameraSearch] = useState<string>("");
   const [isCameraDropdownOpen, setIsCameraDropdownOpen] = useState<boolean>(false);
 
+  // ISO raw values for backend queries
   const [startDateTime, setStartDateTime] = useState("");
   const [endDateTime, setEndDateTime] = useState("");
   const maxDateTime = new Date().toISOString().slice(0, 16);
@@ -75,7 +99,7 @@ export default function NVRRecordings() {
     fetchInitialData();
   }, []);
 
-  // Filter cameras based on selected site AND typed text
+  // Strict Filter: Filters camera options dynamically as user types
   const filteredCameras = useMemo(() => {
     let result = cameras;
 
@@ -83,7 +107,7 @@ export default function NVRRecordings() {
       result = result.filter((cam) => {
         const selectedSiteObj = sites.find((s) => s.id === selectedSiteId);
         const selectedSiteName = selectedSiteObj ? selectedSiteObj.name.toLowerCase() : "";
-        
+
         const camSiteId = cam.site_id ? String(cam.site_id) : "";
         const camSiteName = (cam.site_name || "").toLowerCase();
 
@@ -95,12 +119,11 @@ export default function NVRRecordings() {
     }
 
     if (cameraSearch.trim()) {
-      const searchTerm = cameraSearch.toLowerCase();
-      result = result.filter((cam) => {
-        const nameMatch = cam.name ? cam.name.toLowerCase().includes(searchTerm) : false;
-        const idMatch = cam.id ? cam.id.toLowerCase().includes(searchTerm) : false;
-        return nameMatch || idMatch;
-      });
+      const searchTerm = cameraSearch.toLowerCase().trim();
+      // Filter ONLY by camera name
+      result = result.filter((cam) =>
+        cam.name ? cam.name.toLowerCase().includes(searchTerm) : false
+      );
     }
 
     return result;
@@ -156,12 +179,6 @@ export default function NVRRecordings() {
       return;
     }
 
-    const diffDays = (end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24);
-    if (diffDays > 7) {
-      alert("Maximum search range is 7 days.");
-      return;
-    }
-
     setLoadingRecordings(true);
     setDisplayCount(6);
 
@@ -191,7 +208,7 @@ export default function NVRRecordings() {
           timestamp: Number(event.timestamp),
           key: event.key,
           cameraName: currentCamera.name,
-          formattedTime: `${event.day || ''} ${event.time || ''}`.trim(),
+          formattedTime: formatTimestampToDDMMYYYY(Number(event.timestamp)),
           videoUrl: `/api/kerberos/video-stream?camera_name=${encodeURIComponent(currentCamera.name)}&key=${encodeURIComponent(event.key)}`,
         }));
 
@@ -261,7 +278,7 @@ export default function NVRRecordings() {
               <div className="relative w-full">
                 <Input
                   type="text"
-                  placeholder="Select or type camera..."
+                  placeholder="Type to filter camera..."
                   value={cameraSearch}
                   onClick={() => setIsCameraDropdownOpen(true)}
                   onFocus={() => setIsCameraDropdownOpen(true)}
@@ -293,7 +310,7 @@ export default function NVRRecordings() {
                   />
                 </div>
 
-                {/* Dropdown Options List */}
+                {/* Dynamic Dropdown Options List */}
                 {isCameraDropdownOpen && (
                   <>
                     <div
@@ -311,18 +328,13 @@ export default function NVRRecordings() {
                           <div
                             key={camera.id}
                             onClick={() => handleSelectCamera(camera)}
-                            className={`px-3 py-2 text-sm cursor-pointer hover:bg-blue-50 dark:hover:bg-zinc-800 transition-colors flex justify-between items-center ${
+                            className={`px-3 py-2 text-sm cursor-pointer hover:bg-blue-50 dark:hover:bg-zinc-800 transition-colors ${
                               selectedCameraId === camera.id
                                 ? "bg-blue-50 dark:bg-zinc-800 font-semibold text-blue-600 dark:text-blue-400"
                                 : "text-gray-700 dark:text-gray-200"
                             }`}
                           >
-                            <span>{camera.name}</span>
-                            {camera.site_name && (
-                              <span className="text-[10px] text-gray-400 dark:text-gray-500 bg-gray-100 dark:bg-zinc-900 px-1.5 py-0.5 rounded">
-                                {}
-                              </span>
-                            )}
+                            {camera.name}
                           </div>
                         ))
                       )}
@@ -333,26 +345,66 @@ export default function NVRRecordings() {
             )}
           </div>
 
-          <div className="flex flex-col gap-1 w-full">
-            <label className="text-xs font-semibold text-gray-500 dark:text-gray-400">From</label>
-            <Input
-              type="datetime-local"
-              value={startDateTime}
-              max={maxDateTime}
-              onChange={(e) => setStartDateTime(e.target.value)}
-              className="w-full h-9 bg-white dark:bg-zinc-950 border-gray-200 dark:border-zinc-800 text-sm"
-            />
+          {/* From Date Picker */}
+          <div className="flex flex-col gap-1 w-full relative">
+            <label className="text-xs font-semibold text-gray-500 dark:text-gray-400">
+              From (DD/MM/YYYY)
+            </label>
+            <div
+              className="relative w-full cursor-pointer"
+              onClick={() => startPickerRef.current?.showPicker()}
+            >
+              <Input
+                type="text"
+                readOnly
+                placeholder="DD/MM/YYYY HH:mm"
+                value={formatToDDMMYYYY(startDateTime)}
+                className="w-full h-9 bg-white dark:bg-zinc-950 border-gray-200 dark:border-zinc-800 text-sm cursor-pointer pr-8"
+              />
+              <Input
+                ref={startPickerRef}
+                type="datetime-local"
+                value={startDateTime}
+                max={maxDateTime}
+                onChange={(e) => setStartDateTime(e.target.value)}
+                className="sr-only"
+              />
+              <Calendar
+                size={14}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none"
+              />
+            </div>
           </div>
 
-          <div className="flex flex-col gap-1 w-full">
-            <label className="text-xs font-semibold text-gray-500 dark:text-gray-400">To</label>
-            <Input
-              type="datetime-local"
-              value={endDateTime}
-              max={maxDateTime}
-              onChange={(e) => setEndDateTime(e.target.value)}
-              className="w-full h-9 bg-white dark:bg-zinc-950 border-gray-200 dark:border-zinc-800 text-sm"
-            />
+          {/* To Date Picker */}
+          <div className="flex flex-col gap-1 w-full relative">
+            <label className="text-xs font-semibold text-gray-500 dark:text-gray-400">
+              To (DD/MM/YYYY)
+            </label>
+            <div
+              className="relative w-full cursor-pointer"
+              onClick={() => endPickerRef.current?.showPicker()}
+            >
+              <Input
+                type="text"
+                readOnly
+                placeholder="DD/MM/YYYY HH:mm"
+                value={formatToDDMMYYYY(endDateTime)}
+                className="w-full h-9 bg-white dark:bg-zinc-950 border-gray-200 dark:border-zinc-800 text-sm cursor-pointer pr-8"
+              />
+              <Input
+                ref={endPickerRef}
+                type="datetime-local"
+                value={endDateTime}
+                max={maxDateTime}
+                onChange={(e) => setEndDateTime(e.target.value)}
+                className="sr-only"
+              />
+              <Calendar
+                size={14}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none"
+              />
+            </div>
           </div>
 
           <Button
@@ -389,7 +441,7 @@ export default function NVRRecordings() {
                 <div className="relative aspect-video bg-zinc-900 flex items-center justify-center">
                   <div className="absolute top-3 left-3 bg-black/70 rounded px-2 py-1 text-white text-[11px] z-10 flex items-center gap-1 font-mono">
                     <Video size={10} className="text-red-500 fill-red-500" />
-                    {recording.formattedTime || new Date(recording.timestamp * 1000).toLocaleString()}
+                    {recording.formattedTime}
                   </div>
 
                   <button

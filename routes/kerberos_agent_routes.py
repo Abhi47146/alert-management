@@ -167,7 +167,6 @@ def check_mediamtx_path_status(camera_name):
         
     return "inactive"
 
-
 @kerberos_bp.route('/kerberos-cameras', methods=['POST'])
 def create_camera():
     data = request.json or {}
@@ -182,10 +181,18 @@ def create_camera():
     rtsp_url = data["rtsp_url"]
     site_id = data["site_id"]
 
+    # New optional columns
+    camera_ip = data.get("camera_ip") or data.get("cameraIp")
+    camera_port = data.get("camera_port") or data.get("cameraPort")
+    if camera_port is not None:
+        camera_port = int(camera_port)
+    latitude = data.get("latitude")
+    longitude = data.get("longitude")
+
     license_slot_id = data.get("license_slot_id")
     registered_by = data.get("registered_by")
 
-    recording_path = f"{RECORDING_DIRECTORY}/{camera_name}"
+    recording_path = f"{RECORDING_DIRECTORY}/{camera_name.lower()}"
     agent_url = f"http://localhost:8889/{camera_name}/"
 
     os.makedirs(recording_path, exist_ok=True)
@@ -202,7 +209,7 @@ def create_camera():
         restart_mediamtx()
         time.sleep(1)
     except Exception as cfg_err:
-        return jsonify({"error": f"Failed updating configs or restarting MediaMTX: {str(cfg_err)}"}), 500
+        return jsonify({"error": f"Failed updating configs or restarting MediaMTX: {cfg_err!s}"}), 500
 
     calculated_status = check_mediamtx_path_status(camera_name)
 
@@ -219,27 +226,35 @@ def create_camera():
             INSERT INTO kerberos_cameras (
                 name,
                 site_id,
+                camera_ip,
+                camera_port,
                 stream_url,
                 agent_port,
                 agent_url,
                 recording_path,
+                latitude,
+                longitude,
                 status,
                 is_licensed,
                 license_slot_id,
                 registered_by
             )
             VALUES (
-                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
+                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
             )
             RETURNING id, created_at;
             """,
             (
                 camera_name,
                 site_id,
+                camera_ip,
+                camera_port,
                 rtsp_url,
                 agent_port,
                 agent_url,
                 recording_path,
+                latitude,
+                longitude,
                 calculated_status,
                 bool(license_slot_id),
                 license_slot_id,
@@ -261,12 +276,16 @@ def create_camera():
             "status": calculated_status,
             "agent_url": agent_url,
             "recording_path": recording_path,
+            "camera_ip": camera_ip,
+            "camera_port": camera_port,
+            "latitude": latitude,
+            "longitude": longitude,
             "created_at": created_at
         }), 201
 
     except Exception as err:
         db.rollback()
-        return jsonify({"error": f"Database error: {str(err)}"}), 500
+        return jsonify({"error": f"Database error: {err!s}"}), 500
 
 
 @kerberos_bp.route('/kerberos-cameras', methods=['GET'])
@@ -289,10 +308,14 @@ def get_cameras():
                 kc.name,
                 kc.site_id,
                 s.name as site_name,
+                kc.camera_ip,
+                kc.camera_port,
                 kc.stream_url,
                 kc.agent_port,
                 kc.agent_url,
                 kc.recording_path,
+                kc.latitude,
+                kc.longitude,
                 kc.status,
                 kc.is_licensed,
                 kc.license_slot_id,
@@ -323,10 +346,23 @@ def get_cameras():
                 "siteId": str(camera.get("site_id")),
                 "site_name": camera.get("site_name") or "Primary Site",
                 "siteName": camera.get("site_name") or "Primary Site",
+                "camera_ip": camera.get("camera_ip"),
+                "cameraIp": camera.get("camera_ip"),
+                "camera_port": camera.get("camera_port"),
+                "cameraPort": camera.get("camera_port"),
                 "stream_url": camera.get("stream_url"),
                 "rtspUrl": camera.get("stream_url"),
                 "streamUrl": f"http://localhost:8889/{cam_key}/",
+                "agent_port": camera.get("agent_port"),
+                "agent_url": camera.get("agent_url"),
+                "recording_path": camera.get("recording_path"),
+                "latitude": float(camera.get("latitude")) if camera.get("latitude") is not None else None,
+                "longitude": float(camera.get("longitude")) if camera.get("longitude") is not None else None,
                 "status": live_status,
+                "is_licensed": camera.get("is_licensed"),
+                "license_slot_id": str(camera.get("license_slot_id")) if camera.get("license_slot_id") else None,
+                "registered_by": str(camera.get("registered_by")) if camera.get("registered_by") else None,
+                "deregistered_at": camera.get("deregistered_at"),
                 "created_at": camera.get("created_at")
             })
 
@@ -352,7 +388,7 @@ def update_camera(camera_id):
         # Fetch current record to get existing camera details
         cursor.execute(
             """
-            SELECT id, name, site_id, stream_url, agent_port, recording_path
+            SELECT id, name, site_id, camera_ip, camera_port, stream_url, agent_port, recording_path, latitude, longitude
             FROM kerberos_cameras
             WHERE id = %s;
             """,
@@ -371,6 +407,15 @@ def update_camera(camera_id):
         new_rtsp_url = data.get("rtsp_url", old_rtsp_url)
         new_site_id = data.get("site_id", existing_camera["site_id"])
         agent_port = int(data.get("agent_port", existing_camera.get("agent_port") or 1234))
+
+        # Parse new metadata fields (or fallback to existing DB values)
+        new_camera_ip = data.get("camera_ip", data.get("cameraIp", existing_camera.get("camera_ip")))
+        new_camera_port = data.get("camera_port", data.get("cameraPort", existing_camera.get("camera_port")))
+        if new_camera_port is not None:
+            new_camera_port = int(new_camera_port)
+
+        new_latitude = data.get("latitude", existing_camera.get("latitude"))
+        new_longitude = data.get("longitude", existing_camera.get("longitude"))
 
         recording_path = f"{RECORDING_DIRECTORY}/{new_name}"
         agent_url = f"http://localhost:8889/{new_name}/"
@@ -393,7 +438,7 @@ def update_camera(camera_id):
             restart_mediamtx()
             time.sleep(1)
         except Exception as cfg_err:
-            return jsonify({"error": f"Failed updating configs or restarting MediaMTX: {str(cfg_err)}"}), 500
+            return jsonify({"error": f"Failed updating configs or restarting MediaMTX: {cfg_err!s}"}), 500
 
         calculated_status = check_mediamtx_path_status(new_name)
 
@@ -404,20 +449,28 @@ def update_camera(camera_id):
             SET
                 name = %s,
                 site_id = %s,
+                camera_ip = %s,
+                camera_port = %s,
                 stream_url = %s,
                 agent_port = %s,
                 agent_url = %s,
                 recording_path = %s,
+                latitude = %s,
+                longitude = %s,
                 status = %s
             WHERE id = %s;
             """,
             (
                 new_name,
                 new_site_id,
+                new_camera_ip,
+                new_camera_port,
                 new_rtsp_url,
                 agent_port,
                 agent_url,
                 recording_path,
+                new_latitude,
+                new_longitude,
                 calculated_status,
                 camera_id
             )
@@ -429,13 +482,17 @@ def update_camera(camera_id):
             "message": "Camera updated successfully",
             "id": camera_id,
             "status": calculated_status,
+            "camera_ip": new_camera_ip,
+            "camera_port": new_camera_port,
+            "latitude": float(new_latitude) if new_latitude is not None else None,
+            "longitude": float(new_longitude) if new_longitude is not None else None,
             "agent_url": agent_url,
             "recording_path": recording_path
         }), 200
 
     except Exception as err:
         db.rollback()
-        return jsonify({"error": f"Database error during update: {str(err)}"}), 500
+        return jsonify({"error": f"Database error during update: {err!s}"}), 500
 
 
 # DELETE CAMERA STREAM (DELETE)
@@ -491,4 +548,4 @@ def delete_camera(camera_id):
 
     except Exception as err:
         db.rollback()
-        return jsonify({"error": f"Database error during deletion: {str(err)}"}), 500
+        return jsonify({"error": f"Database error during deletion: {err!s}"}), 500
