@@ -1,0 +1,81 @@
+protocols:
+- tcp
+readTimeout: 30s
+api: true
+apiAddress: 0.0.0.0:9997
+hls: true
+hlsAddress: 0.0.0.0:8888
+webrtc: true
+webrtcAddress: 0.0.0.0:8889
+authInternalUsers:
+- user: any
+  pass: null
+  ips: []
+  permissions:
+  - action: publish
+  - action: read
+  - action: playback
+  - action: api
+pathDefaults:
+  sourceProtocol: tcp
+  record: true
+  recordPath: /home/abhishek/recordings/%path/%Y-%m-%d_%H-%M-%S-%f
+  recordFormat: fmp4
+  recordPartDuration: 1s
+  recordSegmentDuration: 5m
+  recordDeleteAfter: 2d
+paths:
+  camera12:
+    source: rtsp://admin:VDCITSPE%404321@172.19.1.134:554/media/video2/video
+    sourceProtocol: tcp
+  camera1:
+    source: rtsp://admin:ITSPEvdc@123@172.19.1.114:554/media/video2/video
+    sourceProtocol: tcp
+  camera2:
+    source: rtsp://admin:itspe@123@172.19.1.115:554/media/video2/video
+    sourceProtocol: tcp
+  camera3:
+    source: rtsp://admin:ITSPEvdc@123@172.19.1.117:554/media/video2/video
+    sourceProtocol: tcp
+  camera4:
+    source: rtsp://admin:VDCITSPE@4321@172.19.1.141:554/media/video2/video
+    sourceProtocol: tcp
+  camera5:
+    source: rtsp://admin:VDCITSPE@4321@172.19.1.142:554/media/video2/video
+    sourceProtocol: tcp
+  camera6:
+    source: rtsp://admin:itspe@123@172.19.1.186:554/media/video2/video
+    sourceProtocol: tcp
+  camera7:
+    source: rtsp://admin:VDCITSPE@4321@172.19.1.185:554/media/video2/video
+    sourceProtocol: tcp
+  camera8:
+    source: rtsp://admin:VDCITSPE@4321@172.19.1.184:554/media/video2/video
+    sourceProtocol: tcp
+  camera9:
+    source: rtsp://admin:VDCITSPE@4321@172.19.1.143:554/media/video2/video
+    sourceProtocol: tcp
+  camera10:
+    source: rtsp://admin:VDCITSPE@4321@172.19.1.144:554/media/video2/video
+    sourceProtocol: tcp
+  camera20:
+    source: rtsp://admin:VDCITSPE@4321@172.19.1.176:554/media/video2/video
+    sourceProtocol: tcp
+  camera11:
+    source: rtsp://admin:VDCITSPE@4321@172.19.1.177:554/media/video2/video
+    sourceProtocol: tcp
+  camera13:
+    source: rtsp://admin:VDCITSPE@4321@172.19.1.178:554/media/video2/video
+    sourceProtocol: tcp
+  CAMERA25:
+    source: rtsp://admin:VDCITSPE@4321@172.19.1.141:554/media/video2/video
+    sourceProtocol: tcp
+  CAMERA14:
+    source: rtsp://admin:VDCITSPE@4321@172.19.1.179:554/media/video2/video
+    sourceProtocol: tcp
+  camera25:
+    source: rtsp://admin:VDCITSPE@4321@172.19.1.141:554/media/video2/video
+    sourceProtocol: tcp
+  camera14:
+    source: rtsp://admin:VDCITSPE@4321@172.19.1.179:554/media/video2/video
+    sourceProtocol: tcp
