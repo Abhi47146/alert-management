@@ -10,24 +10,23 @@ services:
       - "8889:8889"   # WebRTC
       - "9997:9997"   # API
     volumes:
-      - /home/vms-server/mediamtx/mediamtx.yml:/mediamtx.yml
-      - /root/recordings:/root/recordings
+      - /home/abhishek/mediamtx/mediamtx.yml:/mediamtx.yml
+      - /home/abhishek/recordings:/home/abhishek/recordings
     restart: always
 
   api:
     build:
       context: .
       dockerfile: Dockerfile.api
-#    image: 38.109.10.122:8080/drishyam-repo-jsr-api:v1.0.1
     container_name: drishyam_api
     ports:
-      - "8001:8000"
+      - "8000:8000"
     extra_hosts:
       - "host.docker.internal:host-gateway"
     volumes:
       - ./config.ini:/app/config.ini
-      - /home/vms-server/mediamtx/mediamtx.yml:/mediamtx.yml
-      - /root/recordings:/root/recordings
+      - /home/abhishek/mediamtx/mediamtx.yml:/mediamtx.yml
+      - /home/abhishek/recordings:/home/abhishek/recordings
       - /var/run/docker.sock:/var/run/docker.sock
     environment:
       - DB_HOST=host.docker.internal
@@ -43,7 +42,6 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.frontend
- #   image: 38.109.10.122:8080/drishyam-repo-jsr-frontend:v1.0.1
     container_name: drishyam_frontend
     ports:
       - "5000:5000"

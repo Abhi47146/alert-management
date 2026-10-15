@@ -1,7 +1,8 @@
 import os
 import re
-from datetime import datetime, timezone, timedelta
 from configparser import ConfigParser
+from datetime import UTC, datetime, timedelta, timezone
+
 from flask import Blueprint, jsonify, request, send_from_directory
 
 recording_bp = Blueprint("recording_bp", __name__)
@@ -21,17 +22,20 @@ def get_camera_config(camera_name):
     if os.path.exists(CONFIG_INI_PATH):
         config.read(CONFIG_INI_PATH)
 
+    camera_key = camera_name.lower().strip()
+
     if "Kerberos-Recording" in config:
         for key in config["Kerberos-Recording"]:
-            if key.lower().strip() == camera_name.lower().strip():
+            if key.lower().strip() == camera_key:
                 port = config["Kerberos-Recording"][key]
-                path_key = f"{key.lower().strip()}_path"
+                path_key = f"{camera_key}_path"
                 storage_path = config["Kerberos-Recording"].get(
-                    path_key, f"{RECORDING_DIRECTORY}/{camera_name}"
+                    path_key, f"{RECORDING_DIRECTORY}/{camera_key}"
                 )
                 return port, storage_path
 
-    default_path = f"{RECORDING_DIRECTORY}/{camera_name}"
+    # Fallback path strictly uses lower-case camera directory name
+    default_path = f"{RECORDING_DIRECTORY}/{camera_key}"
     if os.path.isdir(default_path):
         return None, default_path
 
@@ -104,10 +108,6 @@ def fetch_kerberos_events():
     if start_ts >= end_ts:
         return jsonify({"error": "Start time must be before end time"}), 400
 
-    MAX_RANGE = 7 * 24 * 60 * 60  # 7 Days
-    if end_ts - start_ts > MAX_RANGE:
-        return jsonify({"error": "Maximum search range is 7 days"}), 400
-
     events = []
 
     try:
@@ -122,7 +122,7 @@ def fetch_kerberos_events():
             # Compare epoch timestamps (Timezone independent)
             if start_ts <= timestamp <= end_ts:
                 # Convert epoch timestamp to IST (Asia/Kolkata)
-                dt_ist = datetime.fromtimestamp(timestamp, tz=timezone.utc).astimezone(IST_TZ)
+                dt_ist = datetime.fromtimestamp(timestamp, tz=UTC).astimezone(IST_TZ)
 
                 events.append({
                     "key": filename,
@@ -131,8 +131,8 @@ def fetch_kerberos_events():
                     "day": dt_ist.strftime("%d-%m-%Y"),
                     "short_day": dt_ist.strftime("%b %d"),
                     "time": dt_ist.strftime("%I:%M:%S %p"),  # Formats as "12:10:05 PM" IST
-                    "camera_name": camera_name,
-                    "camera_key": ""
+                    "camera_name": camera_name, 
+                    "camera_key": camera_name.lower()
                 })
 
         # Sort newest recordings first

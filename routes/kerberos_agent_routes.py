@@ -19,7 +19,7 @@ conf.read('config.ini')
 
 CONFIG_INI_PATH = conf.get("File_Path", "CONFIG_INI_PATH", fallback="/app/config.ini")
 MEDIAMTX_YML_PATH = conf.get("File_Path", "MEDIAMTX_YML_PATH", fallback="/mediamtx.yml")
-RECORDING_DIRECTORY = conf.get("File_Path", "RECORDING_DIRECTORY", fallback="/home/abhishek/recordings")
+RECORDING_DIRECTORY = conf.get("File_Path", "RECORDING_DIRECTORY", fallback="/root/recordings")
 SCHEMA_NAME = conf.get('DATABASE', 'db_schema', fallback=conf.get('DATABASE', 'db_user', fallback='public'))
 MEDIAMTX_API_URL = os.getenv("MEDIAMTX_API_URL", "http://mediamtx:9997")
 MEDIAMTX_CONTAINER_NAME = "mediamtx"
@@ -38,7 +38,7 @@ def update_config_ini(camera_name, agent_port, recording_path):
 
     key_name = camera_name.lower()
     config["Kerberos-Recording"][key_name] = str(agent_port)
-    config["Kerberos-Recording"][f"{key_name}_path"] = recording_path
+    config["Kerberos-Recording"][f"{key_name}_path"] = recording_path.lower()  
 
     with open(CONFIG_INI_PATH, "w") as configfile:
         config.write(configfile)
@@ -118,13 +118,14 @@ def get_cameras_from_mediamtx():
                 paths = data.get("paths", {}) or {}
 
                 for cam_name in paths:
+                    cam_key = cam_name.lower()
                     formatted_cameras.append({
-                        "id": cam_name,
-                        "name": cam_name.capitalize(),
-                        "streamUrl": f"http://localhost:8889/{cam_name}/",
+                        "id": cam_key,
+                        "name": cam_name,
+                        "streamUrl": f"http://localhost:8889/{cam_key}/",
                         "ipAddress": "localhost:8889",
                         "siteName": "Primary Site",
-                        "status": check_mediamtx_path_status(cam_name)
+                        "status": check_mediamtx_path_status(cam_key)
                     })
         except (FileNotFoundError) as e:
             print(f"[ERROR] Failed reading mediamtx.yml: {e}")
@@ -176,12 +177,11 @@ def create_camera():
         if field not in data:
             return jsonify({"error": f"'{field}' is required"}), 400
 
-    camera_name = data["camera_name"]
+    camera_name = str(data["camera_name"]).strip()
     agent_port = int(data.get("agent_port", 1234))
     rtsp_url = data["rtsp_url"]
     site_id = data["site_id"]
 
-    # New optional columns
     camera_ip = data.get("camera_ip") or data.get("cameraIp")
     camera_port = data.get("camera_port") or data.get("cameraPort")
     if camera_port is not None:
@@ -192,8 +192,9 @@ def create_camera():
     license_slot_id = data.get("license_slot_id")
     registered_by = data.get("registered_by")
 
+    # Lowercase enforced for folder and config paths
     recording_path = f"{RECORDING_DIRECTORY}/{camera_name.lower()}"
-    agent_url = f"http://localhost:8889/{camera_name}/"
+    agent_url = f"http://localhost:8889/{camera_name.lower()}/"
 
     os.makedirs(recording_path, exist_ok=True)
 
@@ -203,7 +204,6 @@ def create_camera():
         print(f"[WARNING] Skipping chmod: '{recording_path}' permission not modified.")
 
     try:
-        # Update config files and restart MediaMTX
         update_config_ini(camera_name, agent_port, recording_path)
         update_mediamtx_yml(camera_name, rtsp_url, recording_path)
         restart_mediamtx()
@@ -245,7 +245,7 @@ def create_camera():
             RETURNING id, created_at;
             """,
             (
-                camera_name,
+                camera_name,  
                 site_id,
                 camera_ip,
                 camera_port,
@@ -273,6 +273,7 @@ def create_camera():
         return jsonify({
             "message": "Camera stream & recording added successfully",
             "id": str(camera_id),
+            "name": camera_name,
             "status": calculated_status,
             "agent_url": agent_url,
             "recording_path": recording_path,
@@ -291,8 +292,6 @@ def create_camera():
 @kerberos_bp.route('/kerberos-cameras', methods=['GET'])
 def get_cameras():
     cursor = db.cursor()
-
-    # Fetch status mapping from MediaMTX API port 9997
     active_statuses = get_all_mediamtx_camera_statuses()
 
     try:
@@ -335,12 +334,11 @@ def get_cameras():
             cam_name = camera.get("name", "")
             cam_key = cam_name.lower()
             
-            # Lookup status directly from MediaMTX API output
             live_status = active_statuses.get(cam_key, "inactive")
 
             formatted_cameras.append({
                 "id": str(camera.get("id")),
-                "name": cam_name,
+                "name": cam_name,  
                 "camera_name": cam_name,
                 "site_id": str(camera.get("site_id")),
                 "siteId": str(camera.get("site_id")),
@@ -385,7 +383,6 @@ def update_camera(camera_id):
         )
         cursor.execute(set_schema_query)
 
-        # Fetch current record to get existing camera details
         cursor.execute(
             """
             SELECT id, name, site_id, camera_ip, camera_port, stream_url, agent_port, recording_path, latitude, longitude
@@ -402,13 +399,11 @@ def update_camera(camera_id):
         old_name = existing_camera["name"]
         old_rtsp_url = existing_camera["stream_url"]
 
-        # Parse requested changes (or preserve existing values)
-        new_name = data.get("camera_name", old_name)
+        new_name = str(data.get("camera_name", old_name)).strip()
         new_rtsp_url = data.get("rtsp_url", old_rtsp_url)
         new_site_id = data.get("site_id", existing_camera["site_id"])
         agent_port = int(data.get("agent_port", existing_camera.get("agent_port") or 1234))
 
-        # Parse new metadata fields (or fallback to existing DB values)
         new_camera_ip = data.get("camera_ip", data.get("cameraIp", existing_camera.get("camera_ip")))
         new_camera_port = data.get("camera_port", data.get("cameraPort", existing_camera.get("camera_port")))
         if new_camera_port is not None:
@@ -417,8 +412,9 @@ def update_camera(camera_id):
         new_latitude = data.get("latitude", existing_camera.get("latitude"))
         new_longitude = data.get("longitude", existing_camera.get("longitude"))
 
-        recording_path = f"{RECORDING_DIRECTORY}/{new_name}"
-        agent_url = f"http://localhost:8889/{new_name}/"
+        # Lowercase enforced for folder and config paths
+        recording_path = f"{RECORDING_DIRECTORY}/{new_name.lower()}"
+        agent_url = f"http://localhost:8889/{new_name.lower()}/"
 
         os.makedirs(recording_path, exist_ok=True)
         try:
@@ -427,12 +423,10 @@ def update_camera(camera_id):
             print(f"[WARNING] Skipping chmod for '{recording_path}'.")
 
         try:
-            # If camera name changed, clear old configuration keys from both config files
-            if old_name != new_name:
+            if old_name.lower() != new_name.lower():
                 remove_from_config_ini(old_name)
                 remove_from_mediamtx_yml(old_name)
 
-            # Write updated values
             update_config_ini(new_name, agent_port, recording_path)
             update_mediamtx_yml(new_name, new_rtsp_url, recording_path)
             restart_mediamtx()
@@ -442,7 +436,6 @@ def update_camera(camera_id):
 
         calculated_status = check_mediamtx_path_status(new_name)
 
-        # Update database entry
         cursor.execute(
             """
             UPDATE kerberos_cameras
@@ -506,7 +499,6 @@ def delete_camera(camera_id):
         )
         cursor.execute(set_schema_query)
 
-        # Fetch camera details before deletion
         cursor.execute(
             """
             SELECT id, name
@@ -523,14 +515,12 @@ def delete_camera(camera_id):
         cam_name = camera["name"]
 
         try:
-            # Delete configuration entries from both config files
             remove_from_config_ini(cam_name)
             remove_from_mediamtx_yml(cam_name)
             restart_mediamtx()
         except Exception as cfg_err:
             print(f"[WARNING] Failed removing configuration files for {cam_name}: {cfg_err}")
 
-        # Delete database row
         cursor.execute(
             """
             DELETE FROM kerberos_cameras

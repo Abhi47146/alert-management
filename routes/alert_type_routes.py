@@ -1,4 +1,5 @@
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, jsonify, request
+
 from db import db
 
 alert_type_bp = Blueprint("alert_type_bp", __name__)

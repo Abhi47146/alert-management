@@ -1,7 +1,9 @@
-import os
 import base64
+import os
 import uuid
-from flask import Blueprint, request, jsonify
+
+from flask import Blueprint, jsonify, request
+
 from db import db
 
 alert_bp = Blueprint("alert_bp", __name__)

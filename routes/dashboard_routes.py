@@ -1,4 +1,5 @@
 from flask import Blueprint, jsonify
+
 from db import db
 
 dashboard_bp = Blueprint("dashboard_bp", __name__)

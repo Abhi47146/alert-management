@@ -17,6 +17,14 @@ import {
   VideoIcon,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Outlet } from "react-router-dom";
 
 interface UserProfile {
@@ -28,7 +36,7 @@ export default function Layout() {
   const location = useLocation();
   const navigate = useNavigate();
   const { theme, setTheme } = useTheme();
-  
+
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [mounted, setMounted] = useState(false);
   const [user, setUser] = useState<UserProfile | null>(null);
@@ -51,16 +59,15 @@ export default function Layout() {
     { icon: MapPin, label: "Site Management", path: "/site-management" },
     { icon: Camera, label: "Camera Management", path: "/camera-management" },
     { icon: HardDrive, label: "NVR & Recordings", path: "/nvr-recordings" },
-    { icon: VideoIcon, label: "Live Monitoring", path: "/live-view" },
+    { icon: VideoIcon, label: "LIVE Monitoring", path: "/live-view" },
     { icon: Heart, label: "System Health", path: "/system-health" },
-    { icon: Settings, label: "Settings", path: "/settings" },
   ];
 
   const isActive = (path: string) => location.pathname === path;
 
   const handleLogout = () => {
     localStorage.removeItem("token");
-    localStorage.removeItem("user"); 
+    localStorage.removeItem("user");
     navigate("/login");
   };
 
@@ -74,24 +81,23 @@ export default function Layout() {
 
   return (
     <div className="flex h-screen bg-background text-foreground transition-colors">
-      
-      {/* Sidebar - Stays consistently professional dark color but responsive to toggles inside */}
+      {/* Sidebar */}
       <div
         className={`${
           sidebarOpen ? "w-56" : "w-20"
         } bg-[hsl(207,31%,23%)] text-white transition-all flex flex-col`}
       >
-        
-        <div className="p-4 border-t border-[hsl(207,31%,28%)]">
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={() => setSidebarOpen(!sidebarOpen)}
-          className="w-full flex justify-start px-3 text-gray-400 hover:text-white hover:bg-[hsl(207,31%,28%)] bg-transparent border-none"
-        >
-          <Menu size={18} />
-        </Button>
-      </div>
+        {/* Toggle Button Container - Aligned height (h-16) */}
+        <div className="h-16 px-4 flex items-center border-b border-[hsl(207,31%,28%)] flex-shrink-0">
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => setSidebarOpen(!sidebarOpen)}
+            className="w-full flex justify-start px-3 text-gray-400 hover:text-white hover:bg-[hsl(207,31%,28%)] bg-transparent border-none"
+          >
+            <Menu size={18} />
+          </Button>
+        </div>
 
         {/* Navigation */}
         <nav className="flex-1 overflow-y-auto p-4 space-y-1.5">
@@ -115,41 +121,30 @@ export default function Layout() {
             );
           })}
         </nav>
-
-        {/* Bottom Menu / Logout */}
-        <div className="p-4 border-t border-[hsl(207,31%,28%)]">
-          <button
-            onClick={handleLogout}
-            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-gray-300 hover:text-red-400 hover:bg-red-950/20 transition-colors group"
-            title="Logout"
-          >
-            <LogOut size={18} className="flex-shrink-0 text-gray-400 group-hover:text-red-400" />
-            {sidebarOpen && <span className="text-sm truncate">Logout</span>}
-          </button>
-        </div>
-
       </div>
 
       {/* Main Content Pane */}
       <div className="flex-1 flex flex-col overflow-hidden">
-        {/* Top Header */}
-        <div className="bg-card border-b border-border px-8 py-4 flex items-center justify-between transition-colors">
+        {/* Top Header - Aligned height (h-16) */}
+        <div className="bg-card border-b border-border px-8 h-16 flex items-center justify-between transition-colors flex-shrink-0">
           <div className="flex items-center gap-4 flex-1">
             <div className="flex items-center gap-3">
               <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center text-white font-bold text-sm shadow-sm">
                 D
               </div>
               <div>
-                <h1 className="font-bold text-md leading-none mb-1 text-gray-900 dark:text-gray-100">DRISHYAM</h1>
-                <p className="text-[11px] font-medium text-muted-foreground">Surveillance Command Center</p>
+                <h1 className="font-bold text-md leading-none mb-1 text-gray-900 dark:text-gray-100">
+                  DRISHYAM
+                </h1>
+                <p className="text-[11px] font-medium text-muted-foreground">
+                  Surveillance Command Center
+                </p>
               </div>
             </div>
           </div>
 
-          {/* Right Action Elements: Logo / Theme Toggle / Profile */}
+          {/* Right Action Elements: Theme Toggle & Profile Dropdown */}
           <div className="flex items-center gap-4">
-            
-            {/* Logo Image */}
             <div className="flex items-center pr-2 border-r border-border">
               <img
                 src="/logo.jpg"
@@ -169,30 +164,65 @@ export default function Layout() {
               {theme === "dark" ? <Sun size={18} className="text-amber-400" /> : <Moon size={18} />}
             </Button>
 
-            {/* Profile Block */}
-            <div className="flex items-center gap-3 pl-4 border-l border-border h-8">
-              <div className="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center text-white font-bold text-xs shadow-sm">
-                {userFirstLetter}
-              </div>
+            {/* Profile Dropdown Menu */}
+            <div className="pl-4 border-l border-border h-8 flex items-center">
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button className="flex items-center gap-3 outline-none rounded-lg p-1 hover:bg-muted/60 transition-colors">
+                    <div className="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center text-white font-bold text-xs shadow-sm">
+                      {userFirstLetter}
+                    </div>
 
-              <div className="text-left hidden sm:block">
-                <p className="font-semibold text-xs text-gray-900 dark:text-gray-100 leading-none mb-0.5">
-                  {userFirstName}
-                </p>
-                <p className="text-[10px] text-muted-foreground font-medium leading-none">
-                  {userRole}
-                </p>
-              </div>
+                    <div className="text-left hidden sm:block">
+                      <p className="font-semibold text-xs text-gray-900 dark:text-gray-100 leading-none mb-0.5">
+                        {userFirstName}
+                      </p>
+                      <p className="text-[10px] text-muted-foreground font-medium leading-none">
+                        {userRole}
+                      </p>
+                    </div>
+                  </button>
+                </DropdownMenuTrigger>
+
+                <DropdownMenuContent align="end" className="w-56 mt-2">
+                  <DropdownMenuLabel className="font-normal">
+                    <div className="flex flex-col space-y-1">
+                      <p className="text-sm font-medium leading-none">{user?.name || "User"}</p>
+                      <p className="text-xs leading-none text-muted-foreground">{userRole}</p>
+                    </div>
+                  </DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  
+                  <DropdownMenuItem
+                    className="cursor-pointer"
+                    onClick={() => navigate("/settings")}
+                  >
+                    <Settings className="mr-2 h-4 w-4" />
+                    <span>Settings</span>
+                  </DropdownMenuItem>
+
+                  <DropdownMenuSeparator />
+
+                  <DropdownMenuItem
+                    className="cursor-pointer text-red-600 focus:text-red-600 focus:bg-red-50 dark:focus:bg-red-950/30"
+                    onClick={handleLogout}
+                  >
+                    <LogOut className="mr-2 h-4 w-4" />
+                    <span>Log out</span>
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
           </div>
         </div>
 
         {/* Dynamic Page Inject Space */}
         <div className="flex-1 overflow-auto bg-muted/30 transition-colors">
-          <div className="p-8"><Outlet /></div>
+          <div className="p-8">
+            <Outlet />
+          </div>
         </div>
       </div>
     </div>
   );
 }
-

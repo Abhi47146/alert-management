@@ -1,4 +1,5 @@
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, jsonify, request
+
 from db import db
 
 camera_bp = Blueprint("camera_bp", __name__)

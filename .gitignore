@@ -4,6 +4,10 @@ __pycache__/
 myenv/
 venv/
 .env
+config.ini
+docker-compose.yml
+Dockerfile.api
+Dockerfile.frontend
 
 # Node
 node_modules/
